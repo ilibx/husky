@@ -1,0 +1,45 @@
+```
+# Go build artifacts
+bin/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Go cache and test
+go.mod.lock
+*.mod.lock
+go.sum.lock
+*.sum.lock
+.coverprofile
+*.test
+*.prof
+
+# Dependencies
+vendor/
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
+```
