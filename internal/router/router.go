@@ -5,17 +5,34 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/internal/config"
+	"github.com/husky/husky/internal/handler"
 	"github.com/husky/husky/internal/middleware/auth"
+	"github.com/husky/husky/internal/repository"
+	"github.com/husky/husky/internal/service"
+	"github.com/husky/husky/pkg/logger"
 )
 
 // SetupRouter 设置路由
-func SetupRouter(cfg *config.Config) http.Handler {
+func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log *logger.Logger) http.Handler {
 	// 设置 Gin 模式
 	if cfg.ServerMode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	r := gin.Default()
+
+	// 初始化仓库
+	ticketRepo := repository.NewTicketRepository(dbConn.DB)
+	kbRepo := repository.NewVectorStoreRepository(dbConn.DB)
+
+	// 初始化服务
+	ticketService := service.NewTicketService(ticketRepo)
+	knowledgeService := service.NewKnowledgeService(kbRepo)
+
+	// 初始化处理器
+	ticketHandler := handler.NewTicketHandler(ticketService, log)
+	knowledgeHandler := handler.NewKnowledgeHandler(knowledgeService)
+	webhookHandler := handler.NewWebhookHandler(ticketService, log)
 
 	// 健康检查端点
 	r.GET("/health", func(c *gin.Context) {
@@ -48,26 +65,31 @@ func SetupRouter(cfg *config.Config) http.Handler {
 			users.DELETE("/:id", nil)
 		}
 
-		// 工单管理路由 - 暂时注释，等待 handler 实现
-		// tickets := v1.Group("/tickets")
-		// tickets.Use(auth.AuthMiddleware())
-		// {
-		// 	tickets.POST("", nil)
-		// 	tickets.GET("", nil)
-		// 	tickets.GET("/:id", nil)
-		// 	tickets.PUT("/:id", nil)
-		// 	tickets.DELETE("/:id", nil)
-		// }
+		// 工单管理路由
+		tickets := v1.Group("/tickets")
+		tickets.Use(auth.AuthMiddleware())
+		{
+			tickets.POST("", ticketHandler.CreateTicket)
+			tickets.GET("", ticketHandler.ListTickets)
+			tickets.GET("/:id", ticketHandler.GetTicket)
+			tickets.PUT("/:id", ticketHandler.UpdateTicket)
+			tickets.DELETE("/:id", ticketHandler.DeleteTicket)
+			tickets.POST("/:id/assign", ticketHandler.AssignTicket)
+			tickets.POST("/:id/status", ticketHandler.UpdateStatus)
+			tickets.POST("/:id/comments", ticketHandler.AddComment)
+			tickets.GET("/:id/comments", ticketHandler.GetComments)
+		}
 
 		// 知识库路由
 		knowledge := v1.Group("/knowledge")
 		knowledge.Use(auth.AuthMiddleware())
 		{
-			knowledge.GET("", nil)
-			knowledge.GET("/:id", nil)
-			knowledge.POST("", nil)
-			knowledge.PUT("/:id", nil)
-			knowledge.DELETE("/:id", nil)
+			knowledge.POST("", knowledgeHandler.CreateKnowledge)
+			knowledge.POST("/search", knowledgeHandler.SearchKnowledge)
+			knowledge.GET("/query", knowledgeHandler.QueryKnowledge)
+			knowledge.GET("/:id", knowledgeHandler.GetKnowledge)
+			knowledge.PUT("/:id", knowledgeHandler.UpdateKnowledge)
+			knowledge.DELETE("/:id", knowledgeHandler.DeleteKnowledge)
 		}
 
 		// SOP 流程路由
@@ -113,13 +135,12 @@ func SetupRouter(cfg *config.Config) http.Handler {
 		}
 	}
 
-	// Webhook 路由（用于渠道事件接收）
+	// Webhook 路由（用于渠道事件接收）- 不需要认证
 	webhooks := r.Group("/webhooks")
 	{
-		webhooks.POST("/feishu/:channelId", nil)
-		webhooks.POST("/lark/:channelId", nil)
-		webhooks.POST("/dingtalk/:channelId", nil)
-		webhooks.POST("/wecom/:channelId", nil)
+		webhooks.POST("/lark", webhookHandler.LarkWebhook)
+		webhooks.POST("/dingtalk", webhookHandler.DingTalkWebhook)
+		webhooks.POST("/wecom", webhookHandler.WeComWebhook)
 	}
 
 	return r

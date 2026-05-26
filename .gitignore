@@ -1,58 +1,45 @@
 ```
+# Go build artifacts
+bin/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Go cache and test
+go.mod.lock
+*.mod.lock
+go.sum.lock
+*.sum.lock
+.coverprofile
+*.test
+*.prof
+
 # Dependencies
-go.mod
-go.sum
+vendor/
+
+# Logs
+*.log
 
 # Environment
 .env
 .env.local
-!.env.example
-
-# Logs and temp files
-*.log
-*.tmp
+*.env.*
 
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# Compiled and build artifacts
-*.o
-*.obj
-*.out
-*.exe
-*.dll
-*.so
-*.a
-
-# Build directories
-bin/
-dist/
-build/
-target/
-
-# Dependencies cache
-vendor/
-node_modules/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-
-# Testing
-.coverage
-coverage/
-htmlcov/
-.nyc_output/
-*.gcda
-*.gcno
-
-# OS generated files
+# OS
 .DS_Store
 Thumbs.db
-ehthumbs.db
-Icon?
-.CFUserTextEncoding
-.dirstamp
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
 ```
