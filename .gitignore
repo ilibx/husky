@@ -1,50 +1,31 @@
-# Binaries
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-main
+```
+# Dependencies
+go.sum
 
-# Test binary
-*.test
-
-# Output of the go coverage tool
+# Compiled and build artifacts
+*.o
+*.obj
 *.out
+
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editors
+.vscode/
+.idea/
+
+# Coverage
+coverage/
+htmlcov/
+.coverage
 
 # Dependency directories
 vendor/
-
-# Go workspace file
-go.work
-
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-*~
-
-# Logs
-logs/
-*.log
-
-# Environment variables
-.env
-.env.local
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Docker volumes
-postgres_data/
-redis_data/
-
-# Build output
-dist/
-build/
-
-# Temporary files
-tmp/
-temp/
+```
