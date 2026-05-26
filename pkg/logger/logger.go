@@ -1,6 +1,8 @@
 package logger
 
 import (
+	"os"
+
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
@@ -40,10 +42,10 @@ func NewLogger(level string, format string) (*Logger, error) {
 		encoder = zapcore.NewJSONEncoder(encoderConfig)
 	}
 
-	// 创建 core
+	// 创建 core - 输出到 stdout
 	core := zapcore.NewCore(
 		encoder,
-		zapcore.AddSync(zapcore.Lock(zapcore.AddSync(nil))),
+		zapcore.AddSync(zapcore.Lock(os.Stdout)),
 		zapLevel,
 	)
 

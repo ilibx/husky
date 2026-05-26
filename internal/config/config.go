@@ -15,18 +15,23 @@ type Config struct {
 	LogFormat    string // json, console
 
 	// 数据库配置
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	DBSSLMode  string
+	DBHost            string
+	DBPort            int
+	DBUser            string
+	DBPassword        string
+	DBName            string
+	DBSSLMode         string
+	DBMaxIdleConns    int
+	DBMaxOpenConns    int
+	DBConnMaxLifetime int
 
 	// Redis 配置
-	RedisHost     string
-	RedisPort     string
-	RedisPassword string
-	RedisDB       int
+	RedisHost         string
+	RedisPort         string
+	RedisPassword     string
+	RedisDB           int
+	RedisPoolSize     int
+	RedisMinIdleConns int
 
 	// JWT 配置
 	JWTSecret     string
@@ -41,6 +46,16 @@ type Config struct {
 	VectorDBPort     string
 }
 
+// Conf 全局配置实例
+var Conf *Config
+
+// InitConfig 初始化全局配置
+func InitConfig() error {
+	var err error
+	Conf, err = LoadConfig()
+	return err
+}
+
 // LoadConfig 从环境变量加载配置
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
@@ -49,16 +64,21 @@ func LoadConfig() (*Config, error) {
 		ServerMode:   getEnv("SERVER_MODE", "debug"),
 		LogLevel:     getEnv("LOG_LEVEL", "info"),
 		LogFormat:    getEnv("LOG_FORMAT", "json"),
-		DBHost:       getEnv("DB_HOST", "localhost"),
-		DBPort:       getEnv("DB_PORT", "5432"),
-		DBUser:       getEnv("DB_USER", "postgres"),
-		DBPassword:   getEnv("DB_PASSWORD", "postgres"),
-		DBName:       getEnv("DB_NAME", "husky"),
-		DBSSLMode:    getEnv("DB_SSLMODE", "disable"),
-		RedisHost:    getEnv("REDIS_HOST", "localhost"),
-		RedisPort:    getEnv("REDIS_PORT", "6379"),
-		RedisPassword: getEnv("REDIS_PASSWORD", ""),
-		RedisDB:      getEnvAsInt("REDIS_DB", 0),
+		DBHost:            getEnv("DB_HOST", "localhost"),
+		DBPort:            getEnvAsInt("DB_PORT", 5432),
+		DBUser:            getEnv("DB_USER", "postgres"),
+		DBPassword:        getEnv("DB_PASSWORD", "postgres"),
+		DBName:            getEnv("DB_NAME", "husky"),
+		DBSSLMode:         getEnv("DB_SSLMODE", "disable"),
+		DBMaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 10),
+		DBMaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 100),
+		DBConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME", 3600),
+		RedisHost:         getEnv("REDIS_HOST", "localhost"),
+		RedisPort:         getEnv("REDIS_PORT", "6379"),
+		RedisPassword:     getEnv("REDIS_PASSWORD", ""),
+		RedisDB:           getEnvAsInt("REDIS_DB", 0),
+		RedisPoolSize:     getEnvAsInt("REDIS_POOL_SIZE", 100),
+		RedisMinIdleConns: getEnvAsInt("REDIS_MIN_IDLE_CONNS", 5),
 		JWTSecret:    getEnv("JWT_SECRET", "husky-secret-key-change-in-production"),
 		JWTExpireHour: getEnvAsInt("JWT_EXPIRE_HOUR", 24),
 		LLMProvider:   getEnv("LLM_PROVIDER", "openai"),

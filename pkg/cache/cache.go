@@ -7,7 +7,29 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v8"
+	"github.com/husky/husky/internal/config"
 )
+
+// NewRedis 创建 Redis 连接
+func NewRedis(cfg *config.Config) (*redis.Client, error) {
+	client := redis.NewClient(&redis.Options{
+		Addr:         fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort),
+		Password:     cfg.RedisPassword,
+		DB:           cfg.RedisDB,
+		PoolSize:     cfg.RedisPoolSize,
+		MinIdleConns: cfg.RedisMinIdleConns,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := client.Ping(ctx).Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect redis: %w", err)
+	}
+
+	return client, nil
+}
 
 // Cache Redis 缓存封装
 type Cache struct {

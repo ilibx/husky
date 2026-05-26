@@ -1,31 +1,58 @@
 ```
 # Dependencies
+go.mod
 go.sum
-
-# Compiled and build artifacts
-*.o
-*.obj
-*.out
-
-# Logs and temp files
-*.log
-*.tmp
-*.swp
 
 # Environment
 .env
 .env.local
-*.env.*
+.env.*
+
+# Logs and temp files
+*.log
+*.tmp
 
 # Editors
 .vscode/
 .idea/
 
-# Coverage
+# Compiled and build artifacts
+*.o
+*.obj
+*.out
+*.exe
+*.dll
+*.so
+*.a
+
+# Build directories
+bin/
+dist/
+build/
+target/
+
+# Dependencies cache
+vendor/
+node_modules/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Testing
+.coverage
 coverage/
 htmlcov/
-.coverage
+.nyc_output/
+*.gcda
+*.gcno
 
-# Dependency directories
-vendor/
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+.CFUserTextEncoding
+.dirstamp
 ```

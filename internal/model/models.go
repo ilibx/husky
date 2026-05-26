@@ -6,6 +6,27 @@ import (
 	"gorm.io/gorm"
 )
 
+// TicketStatus 工单状态
+type TicketStatus string
+
+const (
+	TicketStatusOpen       TicketStatus = "open"
+	TicketStatusInProgress TicketStatus = "in_progress"
+	TicketStatusPending    TicketStatus = "pending"
+	TicketStatusResolved   TicketStatus = "resolved"
+	TicketStatusClosed     TicketStatus = "closed"
+)
+
+// Priority 优先级
+type Priority string
+
+const (
+	PriorityLow      Priority = "low"
+	PriorityMedium   Priority = "medium"
+	PriorityHigh     Priority = "high"
+	PriorityUrgent   Priority = "urgent"
+)
+
 // Base 基础模型，包含通用字段
 type Base struct {
 	ID        uint           `gorm:"primarykey" json:"id"`

@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/husky/husky/internal/config"
+	"github.com/husky/husky/internal/database"
 	"github.com/husky/husky/internal/router"
+	"github.com/husky/husky/pkg/cache"
 	"github.com/husky/husky/pkg/logger"
 )
 
@@ -31,10 +33,38 @@ func main() {
 	log.Info("Starting Husky API server...", "config", cfg)
 
 	// 初始化数据库连接
-	// TODO: 实现数据库初始化
+	dbCfg := database.Config{
+		Host:            cfg.DBHost,
+		Port:            cfg.DBPort,
+		User:            cfg.DBUser,
+		Password:        cfg.DBPassword,
+		DBName:          cfg.DBName,
+		SSLMode:         cfg.DBSSLMode,
+		MaxIdleConns:    cfg.DBMaxIdleConns,
+		MaxOpenConns:    cfg.DBMaxOpenConns,
+		ConnMaxLifetime: time.Duration(cfg.DBConnMaxLifetime) * time.Second,
+	}
+	db, err := database.NewDatabase(dbCfg)
+	if err != nil {
+		log.Fatal("Failed to initialize database", "error", err)
+	}
+	log.Info("Database connected successfully")
+
+	// 自动迁移数据库 Schema
+	if err := database.AutoMigrate(db); err != nil {
+		log.Fatal("Failed to migrate database", "error", err)
+	}
+	log.Info("Database migration completed")
 
 	// 初始化缓存连接
-	// TODO: 实现缓存初始化
+	redisClient, err := cache.NewRedis(cfg)
+	if err != nil {
+		log.Fatal("Failed to initialize redis", "error", err)
+	}
+	log.Info("Redis connected successfully")
+
+	// 将 redis 客户端注入到上下文 (后续使用)
+	_ = redisClient
 
 	// 设置路由
 	r := router.SetupRouter(cfg)

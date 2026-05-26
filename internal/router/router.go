@@ -5,6 +5,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/internal/config"
+	"github.com/husky/husky/internal/middleware/auth"
 )
 
 // SetupRouter 设置路由
@@ -27,16 +28,17 @@ func SetupRouter(cfg *config.Config) http.Handler {
 	v1 := r.Group("/api/v1")
 	{
 		// 认证相关路由
-		auth := v1.Group("/auth")
+		authGroup := v1.Group("/auth")
 		{
 			// TODO: 实现认证路由
-			auth.POST("/login", nil)
-			auth.POST("/logout", nil)
-			auth.POST("/refresh", nil)
+			authGroup.POST("/login", nil)
+			authGroup.POST("/logout", nil)
+			authGroup.POST("/refresh", nil)
 		}
 
 		// 用户管理路由
 		users := v1.Group("/users")
+		users.Use(auth.AuthMiddleware())
 		{
 			// TODO: 实现用户管理路由
 			users.GET("", nil)
@@ -46,23 +48,21 @@ func SetupRouter(cfg *config.Config) http.Handler {
 			users.DELETE("/:id", nil)
 		}
 
-		// 工单管理路由
-		tickets := v1.Group("/tickets")
-		{
-			// TODO: 实现工单管理路由
-			tickets.GET("", nil)
-			tickets.GET("/:id", nil)
-			tickets.POST("", nil)
-			tickets.PUT("/:id", nil)
-			tickets.DELETE("/:id", nil)
-			tickets.POST("/:id/comments", nil)
-			tickets.POST("/:id/attachments", nil)
-		}
+		// 工单管理路由 - 暂时注释，等待 handler 实现
+		// tickets := v1.Group("/tickets")
+		// tickets.Use(auth.AuthMiddleware())
+		// {
+		// 	tickets.POST("", nil)
+		// 	tickets.GET("", nil)
+		// 	tickets.GET("/:id", nil)
+		// 	tickets.PUT("/:id", nil)
+		// 	tickets.DELETE("/:id", nil)
+		// }
 
 		// 知识库路由
 		knowledge := v1.Group("/knowledge")
+		knowledge.Use(auth.AuthMiddleware())
 		{
-			// TODO: 实现知识库路由
 			knowledge.GET("", nil)
 			knowledge.GET("/:id", nil)
 			knowledge.POST("", nil)
@@ -72,8 +72,8 @@ func SetupRouter(cfg *config.Config) http.Handler {
 
 		// SOP 流程路由
 		sop := v1.Group("/sop")
+		sop.Use(auth.AuthMiddleware())
 		{
-			// TODO: 实现 SOP 路由
 			sop.GET("", nil)
 			sop.GET("/:id", nil)
 			sop.POST("", nil)
@@ -83,8 +83,8 @@ func SetupRouter(cfg *config.Config) http.Handler {
 
 		// Agent 管理路由
 		agents := v1.Group("/agents")
+		agents.Use(auth.AuthMiddleware())
 		{
-			// TODO: 实现 Agent 路由
 			agents.GET("", nil)
 			agents.GET("/:id", nil)
 			agents.POST("", nil)
@@ -94,8 +94,8 @@ func SetupRouter(cfg *config.Config) http.Handler {
 
 		// 渠道配置路由
 		channels := v1.Group("/channels")
+		channels.Use(auth.AuthMiddleware())
 		{
-			// TODO: 实现渠道路由
 			channels.GET("", nil)
 			channels.GET("/:id", nil)
 			channels.POST("", nil)
@@ -105,8 +105,8 @@ func SetupRouter(cfg *config.Config) http.Handler {
 
 		// 统计报表路由
 		stats := v1.Group("/stats")
+		stats.Use(auth.AuthMiddleware())
 		{
-			// TODO: 实现统计路由
 			stats.GET("/overview", nil)
 			stats.GET("/tickets", nil)
 			stats.GET("/performance", nil)
@@ -116,13 +116,9 @@ func SetupRouter(cfg *config.Config) http.Handler {
 	// Webhook 路由（用于渠道事件接收）
 	webhooks := r.Group("/webhooks")
 	{
-		// 飞书 webhook
 		webhooks.POST("/feishu/:channelId", nil)
-		// Lark webhook
 		webhooks.POST("/lark/:channelId", nil)
-		// 钉钉 webhook
 		webhooks.POST("/dingtalk/:channelId", nil)
-		// 企业微信 webhook
 		webhooks.POST("/wecom/:channelId", nil)
 	}
 

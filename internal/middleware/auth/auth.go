@@ -1,4 +1,4 @@
-package middleware
+package auth
 
 import (
 	"net/http"
@@ -44,7 +44,7 @@ func AuthMiddleware() gin.HandlerFunc {
 		// 解析 token
 		claims := &Claims{}
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(config.Conf.JWT.Secret), nil
+			return []byte(config.Conf.JWTSecret), nil
 		})
 
 		if err != nil || !token.Valid {
@@ -106,21 +106,21 @@ func GenerateToken(userID uint, username, email, role string) (string, error) {
 		Email:    email,
 		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(config.Conf.JWT.Expire) * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(config.Conf.JWTExpireHour) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "husky",
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.Conf.JWT.Secret))
+	return token.SignedString([]byte(config.Conf.JWTSecret))
 }
 
 // RefreshToken 刷新 token
 func RefreshToken(tokenString string) (string, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(config.Conf.JWT.Secret), nil
+		return []byte(config.Conf.JWTSecret), nil
 	})
 
 	if err != nil || !token.Valid {
