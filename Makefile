@@ -16,8 +16,25 @@ BUILD_DIR=bin
 
 all: build
 
-## build: Build both API and migrate binaries
-build:
+## web-build: Build Vue frontend (embed mode) and copy to admin/static
+web-build:
+	@echo "Building Vue admin frontend..."
+	cd web && npm ci && npx vite build --mode embed
+	@echo "Copying to internal/admin/static..."
+	rm -rf internal/admin/static
+	cp -r web/dist internal/admin/static
+	@echo "Web build completed!"
+
+## build: Build both API and migrate binaries (runs web-build first)
+build: web-build
+	@echo "Building Husky API..."
+	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/api
+	@echo "Building Husky Migrate..."
+	$(GOBUILD) -o $(BUILD_DIR)/$(MIGRATE_NAME) ./cmd/migrate
+	@echo "Build completed!"
+
+## build-go: Build Go binaries only (skip frontend build)
+build-go:
 	@echo "Building Husky API..."
 	$(GOBUILD) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/api
 	@echo "Building Husky Migrate..."

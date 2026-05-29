@@ -10,6 +10,63 @@ import (
 	"github.com/husky/husky/internal/config"
 )
 
+// CacheInterface 缓存接口，支持 Redis 和 Noop 两种实现
+type CacheInterface interface {
+	Get(ctx context.Context, key string) (string, error)
+	Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Delete(ctx context.Context, key string) error
+	Exists(ctx context.Context, key string) (bool, error)
+	GetJSON(ctx context.Context, key string, dest interface{}) error
+	SetJSON(ctx context.Context, key string, value interface{}, expiration time.Duration) error
+	Increment(ctx context.Context, key string) (int64, error)
+	Decrement(ctx context.Context, key string) (int64, error)
+	Expire(ctx context.Context, key string, expiration time.Duration) error
+	TTL(ctx context.Context, key string) (time.Duration, error)
+}
+
+// NoopCache 空缓存实现，Redis 不可用时降级使用
+type NoopCache struct{}
+
+func (c *NoopCache) Get(ctx context.Context, key string) (string, error) {
+	return "", redis.Nil
+}
+
+func (c *NoopCache) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	return nil
+}
+
+func (c *NoopCache) Delete(ctx context.Context, key string) error {
+	return nil
+}
+
+func (c *NoopCache) Exists(ctx context.Context, key string) (bool, error) {
+	return false, nil
+}
+
+func (c *NoopCache) GetJSON(ctx context.Context, key string, dest interface{}) error {
+	return redis.Nil
+}
+
+func (c *NoopCache) SetJSON(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	return nil
+}
+
+func (c *NoopCache) Increment(ctx context.Context, key string) (int64, error) {
+	return 0, nil
+}
+
+func (c *NoopCache) Decrement(ctx context.Context, key string) (int64, error) {
+	return 0, nil
+}
+
+func (c *NoopCache) Expire(ctx context.Context, key string, expiration time.Duration) error {
+	return nil
+}
+
+func (c *NoopCache) TTL(ctx context.Context, key string) (time.Duration, error) {
+	return 0, nil
+}
+
 // NewRedis 创建 Redis 连接
 func NewRedis(cfg *config.Config) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
@@ -31,7 +88,7 @@ func NewRedis(cfg *config.Config) (*redis.Client, error) {
 	return client, nil
 }
 
-// Cache Redis 缓存封装
+// Cache Redis 缓存封装，实现 CacheInterface
 type Cache struct {
 	client *redis.Client
 }
@@ -105,16 +162,6 @@ func (c *Cache) Expire(ctx context.Context, key string, expiration time.Duration
 // TTL 获取剩余生存时间
 func (c *Cache) TTL(ctx context.Context, key string) (time.Duration, error) {
 	return c.client.TTL(ctx, key).Result()
-}
-
-// Keys 获取匹配的键
-func (c *Cache) Keys(ctx context.Context, pattern string) ([]string, error) {
-	return c.client.Keys(ctx, pattern).Result()
-}
-
-// FlushDB 清空当前数据库
-func (c *Cache) FlushDB(ctx context.Context) error {
-	return c.client.FlushDB(ctx).Err()
 }
 
 // CacheKey 生成缓存键的辅助函数

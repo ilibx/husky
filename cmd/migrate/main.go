@@ -3,7 +3,6 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -59,12 +58,11 @@ func main() {
 
 	// 读取迁移脚本目录
 	migrationDir := "./scripts/migrations"
-	files, err := ioutil.ReadDir(migrationDir)
+	files, err := os.ReadDir(migrationDir)
 	if err != nil {
 		log.Fatalf("Failed to read migration directory: %v", err)
 	}
 
-	// 按文件名排序
 	var sqlFiles []string
 	for _, file := range files {
 		if !file.IsDir() && strings.HasSuffix(file.Name(), ".sql") {
@@ -76,7 +74,7 @@ func main() {
 	for _, sqlFile := range sqlFiles {
 		fmt.Printf("Executing migration: %s\n", sqlFile)
 
-		content, err := ioutil.ReadFile(sqlFile)
+		content, err := os.ReadFile(sqlFile)
 		if err != nil {
 			log.Fatalf("Failed to read migration file %s: %v", sqlFile, err)
 		}

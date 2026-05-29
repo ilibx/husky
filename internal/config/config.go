@@ -44,6 +44,14 @@ type Config struct {
 	VectorDBProvider string
 	VectorDBHost     string
 	VectorDBPort     string
+
+	// 飞书配置
+	FeishuAppID     string
+	FeishuAppSecret string
+
+	// 管理后台配置
+	AdminMode string // embedded, external; default embedded
+	AdminURL string  // external URL for admin UI, e.g. http://localhost:5173
 }
 
 // Conf 全局配置实例
@@ -87,6 +95,10 @@ func LoadConfig() (*Config, error) {
 		VectorDBProvider: getEnv("VECTOR_DB_PROVIDER", "pgvector"),
 		VectorDBHost:     getEnv("VECTOR_DB_HOST", "localhost"),
 		VectorDBPort:     getEnv("VECTOR_DB_PORT", "5432"),
+		FeishuAppID:     getEnv("FEISHU_APP_ID", ""),
+		FeishuAppSecret: getEnv("FEISHU_APP_SECRET", ""),
+		AdminMode:       getEnv("ADMIN_MODE", "embedded"),
+		AdminURL:        getEnv("ADMIN_URL", "http://localhost:5173"),
 	}
 
 	// 验证必要配置

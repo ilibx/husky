@@ -15,7 +15,7 @@ type KnowledgeBase struct {
 	Content   string         `gorm:"type:text;not null" json:"content"`
 	Category  string         `gorm:"type:varchar(100)" json:"category"`
 	Tags      datatypes.JSON `gorm:"type:jsonb" json:"tags"`
-	Vector    datatypes.JSON `gorm:"type:vector(768)" json:"-"` // 存储向量数据，假设使用 768 维向量 (如 text-embedding-ada-002)
+	Vector    datatypes.JSON `gorm:"type:vector(1536)" json:"-"` // 存储向量数据，1536 维 (text-embedding-ada-002 默认维度)
 	Status    string         `gorm:"type:varchar(20);default:'active'" json:"status"` // active, archived
 	CreatedBy string         `gorm:"type:uuid" json:"created_by"`
 	UpdatedAt time.Time      `json:"updated_at"`
@@ -24,7 +24,7 @@ type KnowledgeBase struct {
 
 // TableName 指定表名
 func (KnowledgeBase) TableName() string {
-	return "knowledge_base"
+	return "knowledge"
 }
 
 // BeforeCreate 钩子：生成 UUID

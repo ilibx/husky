@@ -1,345 +1,391 @@
 # Husky - 企业级智能工单系统
 
-[![Go Version](https://img.shields.io/badge/go-1.19+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Status](https://img.shields.io/badge/status-in%20development-yellow.svg)](TODO.md)
 
-## 📖 项目概述
+## 项目概述
 
-Husky 是一个基于 Golang 实现的企业级智能工单处理系统，类似飞书服务台功能。系统集成了 RAG 知识库、工单处理 SOP 管理、HITL（人在回路）交互流程，支持多渠道接入，提供完整的工单管理与统计分析能力。
+Husky 是一个基于 Go + GORM + Gin 实现的企业级智能工单处理系统。集成 RAG 知识库、ReAct + SOP 工作流引擎、LLM Agent 系统、HITL（人在回路）交互流程，支持多渠道接入（飞书），提供完整的工单管理与统计分析能力。内置嵌入式单页 Admin 管理 UI。
 
-## ✨ 核心特性
+## 核心特性
 
-### 🎯 工单管理系统
+### 工单管理系统
 - 完整的工单生命周期管理（创建→分配→处理→关闭）
 - 灵活的状态机配置和自动流转规则
 - 智能工单分配（轮询、负载均衡、技能匹配）
-- 工单评论、附件、协作功能
+- 工单评论、附件、协作、关注功能
 - SLA 超时升级机制
 
-### 🤖 AI 智能能力
-- **RAG 知识库**: 基于向量检索的增强生成，提供精准的智能问答
-- **SOP 管理**: 标准作业程序定义、执行引擎、流程跟踪
-- **HITL 交互**: 人机协作、AI 建议人工审核、反馈学习
-- **Agent 系统**: 内置多个智能 Agent（自动分类、派单、回复、情绪识别等）
+### AI 智能能力
+- **RAG 知识库**: 基于 pgvector 向量检索的增强生成，提供精准智能问答，无向量时 ILIKE 降级
+- **SOP 管理**: 标准作业程序定义（react/human/condition/notification 步骤类型），自动创建 Workflow 实例
+- **ReAct 推理引擎**: SOP 中 `react` 类型步骤使用 ReAct（Reasoning+Acting）循环执行，LLM 在 search_kb/reply_user/update_ticket/complete/fail 工具间自主决策，滑动窗口历史（最近 5 轮），最大 10 轮
+- **Agent 系统**: rule（自动派单/改状态/改优先级）、llm（知识检索+自动回复）、hybrid 三种类型，按 ticket_created/ticket_updated 事件触发
+- **ChatService**: 独立的 LLM 对话服务，与 EmbeddingService 解耦，避免类型断言的 leaky abstraction
 
-### 📱 多渠道接入
-- ✅ 飞书 (Feishu)
-- ✅ Lark (国际版)
-- ✅ 钉钉 (DingTalk)
-- ✅ 企业微信 (WeCom)
-- ✅ Email (IMAP/SMTP)
-- ✅ WebUI (响应式管理后台)
+### 多渠道接入
+- 飞书 (Feishu) — 群聊自动创建、消息卡片、自动回复、人工升级
+- Webhook 通道 — Lark / 钉钉 / 企业微信
+- Restful API
 
-### 📊 统计与分析
-- 工单总量、状态分布、来源渠道统计
-- 处理时效分析、SLA 达标率
-- 客服绩效统计
-- 自定义报表与数据导出
+### Admin 管理后台
+- 嵌入式 SPA（单页 HTML/CSS/JS，Go embed 无构建工具链）
+- 仪表盘（工单概览统计图表）
+- 工单管理（CRUD、筛选、详情）
+- 知识库管理
+- Agent 配置管理
+- SOP 流程管理
+- Workflow 工作流跟踪
+- 用户管理
+- 部门/分类/渠道配置
 
-### 🔐 安全与权限
-- JWT Token 认证
+### 安全与权限
+- JWT Token 认证 + Token 刷新
 - RBAC 基于角色的权限控制
 - 操作审计日志
-- 数据加密存储
 
-## 🏗️ 技术架构
+## 技术架构
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      Husky 系统架构                          │
-├─────────────────────────────────────────────────────────────┤
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                   接入层 (Channels)                  │    │
-│  │  飞书 │ Lark │ 钉钉 │ 企微 │ Email │ WebUI │ API   │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                              │                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                    API Gateway                       │    │
-│  │           (认证/限流/路由/日志)                       │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                              │                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                   业务服务层                         │    │
-│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐     │    │
-│  │  │工单  │ │用户  │ │知识  │ │SOP   │ │Agent │     │    │
-│  │  │服务  │ │服务  │ │服务  │ │服务  │ │服务  │     │    │
-│  │  └──────┘ └──────┘ └──────┘ └──────┘ └──────┘     │    │
-│  │  ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐              │    │
-│  │  │RAG   │ │通知  │ │统计  │ │渠道  │              │    │
-│  │  │服务  │ │服务  │ │服务  │ │服务  │              │    │
-│  │  └──────┘ └──────┘ └──────┘ └──────┘              │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                              │                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                   数据访问层                         │    │
-│  │         Repository 模式 + ORM (GORM)                 │    │
-│  └─────────────────────────────────────────────────────┘    │
-│                              │                                │
-│  ┌─────────────────────────────────────────────────────┐    │
-│  │                   数据存储层                         │    │
-│  │    PostgreSQL (+pgvector) │ Redis │ 对象存储        │    │
-│  └─────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────┐
+│                         Husky 系统架构                            │
+├──────────────────────────────────────────────────────────────────┤
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                     接入层                                │    │
+│  │  飞书 │ Lark │ 钉钉 │ 企微 │ Webhook │ REST API          │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                              │                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                   API Gateway (Gin)                       │    │
+│  │           认证(JWT) │ 限流 │ 路由 │ CORS                 │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                              │                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                    业务服务层                              │    │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐ ┌──────┐   │    │
+│  │  │ 工单    │ │ 用户    │ │ 知识库  │ │ SOP    │ │ Agent│   │    │
+│  │  │ Service│ │ Service│ │ Service│ │ Service│ │Engine│   │    │
+│  │  └────────┘ └────────┘ └────────┘ └────────┘ └──┬───┘   │    │
+│  │  ┌────────┐ ┌────────┐ ┌────────┐ ┌────────┐    │       │    │
+│  │  │Workflow│ │ 通知    │ │ 统计    │ │ 渠道    │    │       │    │
+│  │  │Service │ │ Service│ │ Service│ │ Service│    │       │    │
+│  │  └───┬────┘ └────────┘ └────────┘ └────────┘    │       │    │
+│  │      │   ReAct 循环                               │       │    │
+│  │      │   ┌─────────────────────────┐              │       │    │
+│  │      │   │ LLM → 思考 → 决策工具    │              │       │    │
+│  │      │   │ search_kb / reply_user   │ ←───────────┘       │    │
+│  │      │   │ update_ticket/complete   │                      │    │
+│  │      │   └─────────────────────────┘                      │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                              │                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                  LLM 服务层                                │    │
+│  │  ┌─────────────────┐  ┌─────────────────┐                 │    │
+│  │  │ EmbeddingService │  │   ChatService    │                 │    │
+│  │  │ Embed()/Batch()  │  │   Chat()         │                 │    │
+│  │  └────────┬────────┘  └────────┬────────┘                 │    │
+│  │           │                    │                            │    │
+│  │  ┌────────▼────────────────────▼────────┐                  │    │
+│  │  │    Provider (OpenAI / DashScope)      │                  │    │
+│  │  │    EmbeddingProvider + ChatProvider    │                  │    │
+│  │  └───────────────────────────────────────┘                  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                              │                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                  Admin 管理 UI                            │    │
+│  │    embedded: Go embed SPA (默认)                          │    │
+│  │    external: 反向代理到前端 dev server                     │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                              │                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                  数据访问层 (Repository)                   │    │
+│  │              GORM + 自定义查询 + pgvector                  │    │
+│  └──────────────────────────────────────────────────────────┘    │
+│                              │                                    │
+│  ┌──────────────────────────────────────────────────────────┐    │
+│  │                  数据存储层                                │    │
+│  │    PostgreSQL (+pgvector) │ Redis 缓存                    │    │
+│  └──────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-## 🚀 快速开始
+## 快速开始
 
 ### 前置要求
 
-- Go 1.19+
+- Go 1.21+
 - Docker & Docker Compose
-- PostgreSQL 14+ (推荐带 pgvector 扩展)
+- PostgreSQL 14+（推荐带 pgvector 扩展）
 - Redis 6+
 
-### 本地开发环境
-
-#### 1. 克隆项目
+### 本地开发
 
 ```bash
-git clone <repository-url>
-cd husky
-```
-
-#### 2. 启动基础设施
-
-```bash
-# 使用 Docker Compose 启动 PostgreSQL 和 Redis
+# 1. 启动基础设施 (PostgreSQL + Redis)
 docker-compose up -d postgres redis
-```
 
-#### 3. 配置环境变量
-
-```bash
-cp configs/.env.example .env
+# 2. 配置环境变量
+cp .env.example .env
 # 编辑 .env 文件配置必要的环境变量
-```
 
-#### 4. 安装依赖
-
-```bash
+# 3. 下载依赖
 go mod download
-```
 
-#### 5. 运行应用
+# 4. 运行数据库迁移（SQL 脚本方式，适用于生产）
+go run cmd/migrate/main.go
 
-```bash
-# 运行 API 服务
+# 或直接启动 API（内置 GORM AutoMigrate，适用于开发）
 go run cmd/api/main.go
 
-# 或者编译后运行
-go build -o bin/husky ./cmd/api
-./bin/husky
+# 5. 访问服务
+# API:        http://localhost:8080
+# Admin UI:   http://localhost:8080/admin
+# 健康检查:   http://localhost:8080/health
 ```
 
-#### 6. 完整服务启动
+### Admin UI 部署模式
 
 ```bash
-# 启动所有服务（包括 API 和 Worker）
-docker-compose up -d
+# 模式一：嵌入式（默认）— SPA 内嵌到 Go 二进制，无需额外部署
+ADMIN_MODE=embedded go run ./cmd/api
+
+# 模式二：外部部署（开发用）— 反向代理到前端 dev server
+ADMIN_MODE=external ADMIN_URL=http://localhost:5173 go run ./cmd/api
+
+# 构建嵌入式部署二进制
+make build          # 先 web-build，再 go build
+```
+
+### 使用 Makefile
+
+```bash
+make build          # 编译 API + migrate 二进制（含 embedded SPA）
+make run            # 启动 API 服务
+make migrate        # 运行数据库迁移
+make test           # 运行测试
+make docker-up      # 启动所有 Docker 服务
 ```
 
 ### 验证安装
 
-访问健康检查端点：
-
 ```bash
 curl http://localhost:8080/health
+# {"status":"healthy"}
 ```
 
-预期响应：
-
-```json
-{
-  "status": "healthy"
-}
-```
-
-## 📁 项目结构
+## 项目结构
 
 ```
 husky/
 ├── cmd/                    # 应用程序入口
-│   ├── api/               # API 服务
-│   └── worker/            # 异步任务处理器
+│   ├── api/               # API 服务（含 GORM AutoMigrate）
+│   └── migrate/           # 独立数据库迁移工具（SQL 脚本）
 ├── internal/              # 私有应用代码
-│   ├── config/           # 配置管理
-│   ├── handler/          # HTTP 处理器
-│   ├── middleware/       # 中间件
-│   ├── model/            # 数据模型
-│   ├── repository/       # 数据访问层
-│   ├── router/           # 路由定义
-│   ├── service/          # 业务逻辑层
-│   └── utils/            # 工具函数
+│   ├── admin/             # Admin 管理 UI（Go embed SPA）
+│   ├── config/            # 配置管理（环境变量）
+│   ├── database/          # 数据库连接 + GORM AutoMigrate
+│   ├── handler/           # HTTP 处理器
+│   ├── middleware/        # 中间件（CORS、认证、RBAC）
+│   ├── model/             # GORM 数据模型
+│   ├── repository/        # 数据访问层
+│   ├── router/            # 路由定义 + 服务注入
+│   └── service/           # 业务逻辑层
+│       ├── agent_engine.go    # Agent 执行引擎
+│       ├── workflow_service.go # ReAct + SOP 工作流
+│       ├── ticket_service.go  # 工单服务
+│       ├── knowledge.go       # 知识库服务
+│       └── ...
 ├── pkg/                   # 公共库代码
-│   ├── cache/            # 缓存封装
-│   ├── errors/           # 错误处理
-│   ├── logger/           # 日志封装
-│   └── validator/        # 参数验证
-├── web/                   # 前端代码
-│   ├── src/              # 源代码
-│   └── public/           # 静态资源
-├── configs/               # 配置文件
-├── deployments/           # 部署配置
-│   ├── Dockerfile        # API 服务 Docker 镜像
-│   └── docker-compose.yml
-├── docs/                  # 文档
+│   ├── cache/             # Redis / Noop 缓存
+│   ├── errors/            # 错误处理
+│   │   └── herr/          # HTTP 错误响应
+│   ├── feishu/            # 飞书 SDK（群聊、消息、卡片）
+│   ├── llm/               # LLM 服务
+│   │   ├── provider.go    # EmbeddingProvider + ChatProvider 接口
+│   │   ├── embedding.go   # EmbeddingService
+│   │   ├── chat.go        # ChatService（独立对话服务）
+│   │   ├── openai.go      # OpenAI 实现（Embedding + Chat）
+│   │   └── dashscope.go   # DashScope 实现（仅 Embedding）
+│   ├── logger/            # 结构化日志封装
+│   └── validator/         # 参数验证
 ├── scripts/               # 脚本工具
-├── tests/                 # 测试代码
-├── go.mod                # Go 模块定义
-├── go.sum                # 依赖校验
-├── docker-compose.yml    # Docker Compose 配置
-├── README.md             # 项目说明
-└── TODO.md               # 项目实施计划
+│   └── migrations/        # SQL 迁移脚本
+├── deployments/           # 部署配置
+│   └── Dockerfile         # API 服务 Docker 镜像
+├── docs/                  # 文档
+│   ├── basic.md           # 基础功能与 API 文档
+│   ├── architecture.md    # 系统架构文档
+│   └── channels/
+│       └── feishu.md      # 飞书渠道集成文档
+├── cmd/api/               # API 入口
+├── cmd/migrate/           # 迁移工具入口
+├── Makefile               # 构建/测试/运行命令
+├── docker-compose.yml     # Docker 编排
+└── README.md
 ```
 
-## 📋 开发计划
+## 核心设计
 
-详细的开发计划和任务清单请查看 [TODO.md](TODO.md)
+### ReAct + SOP 工作流
 
-### 当前进度
+SOP 流程定义包含四种步骤类型，创建工单时自动实例化为 Workflow：
 
-| 阶段 | 状态 | 完成度 |
-|------|------|--------|
-| 阶段一：项目基础架构搭建 | 🟢 进行中 | 80% |
-| 阶段二：核心数据模型与数据库设计 | ⚪ 待开始 | 0% |
-| 阶段三：用户认证与权限系统 | ⚪ 待开始 | 0% |
-| 阶段四：工单核心系统 | ⚪ 待开始 | 0% |
-| 阶段五：RAG 知识库系统 | ⚪ 待开始 | 0% |
-| 阶段六：SOP 管理系统 | ⚪ 待开始 | 0% |
-| 阶段七：HITL 交互流程 | ⚪ 待开始 | 0% |
-| 阶段八：多渠道接入系统 | ⚪ 待开始 | 0% |
-| 阶段九：Web 管理后台 | ⚪ 待开始 | 0% |
-| 阶段十：工单查询与统计系统 | ⚪ 待开始 | 0% |
+| 步骤类型 | 说明 |
+|---------|------|
+| `react` | LLM 驱动的 ReAct 循环：思考→决策→执行（search_kb/reply_user/update_ticket/complete/fail），最多 10 轮 |
+| `human` | 人工介入步骤，等待用户处理（可配置超时，默认 24h） |
+| `condition` | 条件判断，根据工单字段（status/priority/assignee）自动决定是否跳过 |
+| `notification` | 发送通知给指定用户 |
 
-**图例**: 🟢 进行中 | 🔵 已完成 | ⚪ 待开始 | 🔴 阻塞
+Workflow 步骤使用 `sync.Map` 互斥锁防止并发 ReAct 循环冲突。
 
-### 里程碑
+### Agent 引擎
 
-- **M1** (第 2-3 周): 基础架构、数据库、认证系统
-- **M2** (第 5-7 周): 工单核心系统、RAG 知识库
-- **M3** (第 9-12 周): SOP 管理、HITL、渠道接入（至少 2 个）
-- **M4** (第 13-16 周): Web 管理后台、统计系统
-- **M5** (第 17-20 周): Agent 系统、通知系统、API 文档
-- **M6** (第 21-24 周): 安全加固、性能优化、完整测试
-- **M7** (第 25-27 周): 生产部署、监控、文档
-- **M8** (持续): MVP 发布、迭代优化
+Agent 在工单创建/更新时自动触发执行：
 
-## 🔧 配置说明
+- **rule** 类型：执行预设动作（auto_assign/set_status/set_priority）
+- **llm** 类型：搜索知识库 → LLM 生成回复 → 添加为内部评论
+- **hybrid** 类型：先执行 rule，再执行 llm
+
+Agent 匹配规则支持按触发事件（ticket_created/ticket_updated/any）筛选。
+
+### ChatService 与 EmbeddingService
+
+- **EmbeddingService**: 封装向量嵌入（Embed/BatchEmbed），供知识库向量检索使用
+- **ChatService**: 封装 LLM 对话（Chat），供 Workflow ReAct 循环和 Agent LLM 使用
+- `NewChatService(provider)` 在 provider 不支持 Chat 时返回 nil（如 DashScope），避免运行时类型断言失败
+
+## 配置说明
 
 ### 环境变量
 
 | 变量名 | 说明 | 默认值 |
 |--------|------|--------|
 | `SERVER_PORT` | 服务器端口 | `8080` |
-| `SERVER_MODE` | 运行模式 (debug/release/test) | `debug` |
-| `LOG_LEVEL` | 日志级别 (debug/info/warn/error) | `info` |
+| `SERVER_MODE` | 运行模式 (debug/release) | `debug` |
+| `LOG_LEVEL` | 日志级别 | `info` |
 | `LOG_FORMAT` | 日志格式 (json/console) | `json` |
 | `DB_HOST` | 数据库主机 | `localhost` |
 | `DB_PORT` | 数据库端口 | `5432` |
 | `DB_USER` | 数据库用户 | `postgres` |
 | `DB_PASSWORD` | 数据库密码 | `postgres` |
 | `DB_NAME` | 数据库名称 | `husky` |
+| `DB_SSLMODE` | SSL 模式 | `disable` |
+| `DB_MAX_IDLE_CONNS` | 最大空闲连接数 | `10` |
+| `DB_MAX_OPEN_CONNS` | 最大打开连接数 | `100` |
+| `DB_CONN_MAX_LIFETIME` | 连接最大生命周期 | `3600` |
 | `REDIS_HOST` | Redis 主机 | `localhost` |
 | `REDIS_PORT` | Redis 端口 | `6379` |
-| `JWT_SECRET` | JWT 密钥 | - |
-| `LLM_PROVIDER` | LLM 服务商 | `openai` |
-| `LLM_API_KEY` | LLM API 密钥 | - |
+| `REDIS_PASSWORD` | Redis 密码 | `` |
+| `REDIS_DB` | Redis 数据库编号 | `0` |
+| `REDIS_POOL_SIZE` | Redis 连接池大小 | `100` |
+| `JWT_SECRET` | JWT 签名密钥 | `husky-secret-key-...` |
+| `JWT_EXPIRE_HOUR` | JWT 过期时间（小时） | `24` |
+| `LLM_PROVIDER` | LLM 服务商 (openai/dashscope) | `openai` |
+| `LLM_API_KEY` | LLM API 密钥 | `` |
+| `LLM_BASE_URL` | LLM API 地址 | `https://api.openai.com/v1` |
+| `FEISHU_APP_ID` | 飞书应用 App ID | `` |
+| `FEISHU_APP_SECRET` | 飞书应用 App Secret | `` |
+| `ADMIN_MODE` | 管理后台部署模式 (embedded/external) | `embedded` |
+| `ADMIN_URL` | external 模式下前端 dev server URL | `http://localhost:5173` |
 
-完整配置项请参考 [configs/.env.example](configs/.env.example)
+完整配置项请参考 [.env.example](.env.example)
 
-## 📚 API 文档
+## API 概要
 
-API 文档将在开发完成后通过 Swagger/OpenAPI 自动生成。
+### 认证
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/auth/login` | 登录 |
+| POST | `/api/v1/auth/register` | 注册 |
+| POST | `/api/v1/auth/refresh` | 刷新 Token |
 
-预览地址：`http://localhost:8080/swagger/index.html`
+### 工单
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/v1/tickets` | 列表/创建 |
+| GET/PUT/DELETE | `/api/v1/tickets/:id` | 详情/更新/删除 |
+| POST | `/api/v1/tickets/:id/assign` | 分配 |
+| POST | `/api/v1/tickets/:id/auto-assign` | 自动分配 |
+| POST | `/api/v1/tickets/:id/claim` | 认领 |
+| POST | `/api/v1/tickets/:id/status` | 更新状态 |
+| POST | `/api/v1/tickets/:id/due` | 设置截止时间 |
+| POST | `/api/v1/tickets/:id/rate` | 评价 |
+| POST/GET | `/api/v1/tickets/:id/comments` | 评论 |
+| POST/GET/DELETE | `/api/v1/tickets/:id/attachments` | 附件 |
+| POST/DELETE | `/api/v1/tickets/:id/watch` | 关注 |
 
-### 主要 API 端点
+### 知识库
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/v1/knowledge` | 列表/创建 |
+| GET/PUT/DELETE | `/api/v1/knowledge/:id` | 详情/更新/删除 |
+| POST | `/api/v1/knowledge/search` | 向量搜索 |
+| POST/GET | `/api/v1/knowledge/import` | 批量导入 |
+| GET | `/api/v1/knowledge/export` | 批量导出 |
 
-- `POST /api/v1/auth/login` - 用户登录
-- `POST /api/v1/auth/logout` - 用户登出
-- `GET /api/v1/tickets` - 获取工单列表
-- `POST /api/v1/tickets` - 创建工单
-- `GET /api/v1/knowledge` - 获取知识库列表
-- `POST /api/v1/knowledge` - 创建知识文档
-- `GET /api/v1/stats/overview` - 获取统计概览
+### Agent
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/v1/agents` | 列表/创建 |
+| GET/PUT/DELETE | `/api/v1/agents/:id` | 详情/更新/删除 |
 
-详细 API 文档请参考 [docs/API.md](docs/API.md) (待完善)
+### SOP
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/v1/sop` | 列表/创建 |
+| GET/PUT/DELETE | `/api/v1/sop/:id` | 详情/更新/删除 |
 
-## 🧪 测试
+### Workflow
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/workflows` | 列表 |
+| GET | `/api/v1/workflows/:id` | 详情 |
+| POST | `/api/v1/workflows/steps/:stepId/complete` | 完成人工步骤 |
+| GET | `/api/v1/workflows/tasks` | 当前用户的待办步骤 |
+
+### 其他
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/users/me` | 当前用户信息 |
+| GET/PUT/DELETE | `/api/v1/users/:id` | 用户管理（管理员） |
+| GET | `/api/v1/departments` | 部门树 |
+| GET | `/api/v1/categories` | 分类列表 |
+| GET/PUT | `/api/v1/notifications` | 通知 |
+| GET | `/api/v1/stats/*` | 统计报表 |
+| POST | `/webhooks/lark` | 飞书 Webhook |
+| POST | `/webhooks/dingtalk` | 钉钉 Webhook |
+| POST | `/webhooks/wecom` | 企微 Webhook |
+| GET | `/admin` | Admin 管理 UI |
+
+详细 API 文档请参考 [docs/basic.md](docs/basic.md)
+
+## 测试
 
 ```bash
-# 运行单元测试
-go test ./...
-
-# 运行测试并生成覆盖率报告
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out -o coverage.html
-
-# 运行集成测试
-go test -tags=integration ./tests/integration/...
+go test ./...                    # 运行所有测试
+go test -coverprofile=coverage.out ./...   # 覆盖率
 ```
 
-## 📝 开发指南
+## 开发指南
 
 ### 代码规范
-
-本项目遵循 Go 语言最佳实践和代码规范：
-
-- 使用 `gofmt` 格式化代码
+- 使用 `gofmt -s -w .` 格式化代码
 - 遵循 [Effective Go](https://golang.org/doc/effective_go.html)
-- 使用 `golint` 进行代码检查
-- 编写清晰的注释和文档
 
 ### 提交规范
-
 ```
-feat: 新功能
-fix: 修复 bug
-docs: 文档更新
-style: 代码格式调整
-refactor: 重构代码
-test: 测试相关
-chore: 构建/工具链相关
+feat:     新功能
+fix:      修复 bug
+docs:     文档更新
+refactor: 重构
+test:     测试
+chore:    构建/工具链
 ```
 
-### 分支策略
-
-- `main` - 主分支，生产环境代码
-- `develop` - 开发分支
-- `feature/*` - 功能分支
-- `bugfix/*` - 修复分支
-- `release/*` - 发布分支
-
-## 🤝 贡献指南
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建你的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交你的修改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启一个 Pull Request
-
-## 📄 许可证
-
-本项目采用 MIT 许可证 - 查看 [LICENSE](LICENSE) 文件了解详情。
-
-## 📞 联系方式
-
-- 项目 Issues: [GitHub Issues](../../issues)
-- 讨论区：[GitHub Discussions](../../discussions)
-
-## 🙏 致谢
-
-感谢以下开源项目：
+## 致谢
 
 - [Gin](https://github.com/gin-gonic/gin) - Web 框架
 - [GORM](https://github.com/go-gorm/gorm) - ORM 库
-- [Zap](https://github.com/uber-go/zap) - 日志库
 - [pgvector](https://github.com/pgvector/pgvector) - 向量数据库扩展
-- [Redis](https://redis.io/) - 缓存数据库
-
----
-
-**Husky** - 让工单处理更智能、更高效！🚀
+- [Redis](https://redis.io/) - 缓存

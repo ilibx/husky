@@ -139,6 +139,29 @@ func Is(err, target error) bool {
 	return errors.Is(err, target)
 }
 
+// ErrorResponse 统一错误响应结构
+type ErrorResponse struct {
+	Code    int         `json:"code"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+}
+
+// NewErrorResponse 创建错误响应
+func NewErrorResponse(code int, message string) *ErrorResponse {
+	return &ErrorResponse{
+		Code:    code,
+		Message: message,
+	}
+}
+
+// New 创建应用错误（简化版，兼容 handler 层调用）
+func New(code int, message string) *AppError {
+	return &AppError{
+		Code:    code,
+		Message: message,
+	}
+}
+
 // Wrap 包装错误
 func Wrap(err error, message string) *AppError {
 	if err == nil {
@@ -156,3 +179,9 @@ func (e *AppError) WithData(data interface{}) *AppError {
 	e.Data = data
 	return e
 }
+
+// handler 层使用的错误码别名
+const (
+	ErrInvalidParams = ErrInvalidParam
+	ErrInternal      = ErrInternalServer
+)

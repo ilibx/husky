@@ -24,6 +24,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
+	config.Conf = cfg
 
 	// 初始化日志
 	logInstance, err := logger.NewLogger(cfg.LogLevel, cfg.LogFormat)
@@ -57,21 +58,24 @@ func main() {
 	}
 	logInstance.Info("Database migration completed")
 
-	// 初始化缓存连接
+	// 初始化缓存连接（可选，Redis 不可用时降级为无缓存模式）
+	var cacheClient cache.CacheInterface
 	redisClient, err := cache.NewRedis(cfg)
 	if err != nil {
-		logInstance.Fatal("Failed to initialize redis", "error", err)
+		logInstance.Warn("Redis unavailable, running without cache", "error", err)
+		cacheClient = &cache.NoopCache{}
+	} else {
+		logInstance.Info("Redis connected successfully")
+		cacheClient = cache.NewCache(redisClient)
 	}
-	logInstance.Info("Redis connected successfully")
 
 	// 创建数据库连接包装
 	dbConn := &repository.DatabaseConnection{
-		DB:    db,
-		Cache: redisClient,
+		DB: db,
 	}
 
-	// 将 redis 客户端注入到上下文 (后续使用)
-	_ = redisClient
+	// 将 cacheClient 注入到上下文 (后续使用)
+	_ = cacheClient
 
 	// 设置路由
 	r := router.SetupRouter(cfg, dbConn, logInstance)

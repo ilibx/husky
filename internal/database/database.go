@@ -68,13 +68,18 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Category{},
 		&model.Comment{},
 		&model.Attachment{},
-		&model.Knowledge{},
+		&model.KnowledgeBase{},
+		&model.Satisfaction{},
 		&model.SOP{},
 		&model.Agent{},
 		&model.Role{},
 		&model.Department{},
 		&model.Notification{},
 		&model.AuditLog{},
+		&model.WebhookMessageRecord{},
+		&model.ChannelConfig{},
+		&model.TicketWatcher{},
+		&model.TicketGroup{},
 	)
 
 	if err != nil {
