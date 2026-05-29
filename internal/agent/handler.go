@@ -283,3 +283,85 @@ func (h *CRUDHandler) PendingSteps(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"data": steps, "total": total})
 }
+
+// ApproveStep 审核通过人工步骤
+func (h *CRUDHandler) ApproveStep(c *gin.Context) {
+	stepIDStr := c.Param("stepId")
+	stepID, err := strconv.ParseUint(stepIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid step id"))
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(uint)
+
+	var req struct {
+		Feedback string `json:"feedback,omitempty"`
+		Result   string `json:"result,omitempty"`
+	}
+	c.ShouldBindJSON(&req)
+
+	if err := h.workflowSvc.ApproveStep(c.Request.Context(), uint(stepID), uid, req.Feedback, req.Result); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "step approved"})
+}
+
+// RejectStep 拒绝人工步骤
+func (h *CRUDHandler) RejectStep(c *gin.Context) {
+	stepIDStr := c.Param("stepId")
+	stepID, err := strconv.ParseUint(stepIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid step id"))
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(uint)
+
+	var req struct {
+		Reason string `json:"reason" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "reason is required"))
+		return
+	}
+
+	if err := h.workflowSvc.RejectStep(c.Request.Context(), uint(stepID), uid, req.Reason); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "step rejected", "reason": req.Reason})
+}
+
+// ReviseStep 要求修改（打回重做）
+func (h *CRUDHandler) ReviseStep(c *gin.Context) {
+	stepIDStr := c.Param("stepId")
+	stepID, err := strconv.ParseUint(stepIDStr, 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid step id"))
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	uid, _ := userID.(uint)
+
+	var req struct {
+		Feedback string `json:"feedback" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "feedback is required"))
+		return
+	}
+
+	if err := h.workflowSvc.ReviseStep(c.Request.Context(), uint(stepID), uid, req.Feedback); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "step sent back for revision"})
+}

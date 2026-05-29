@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -48,6 +49,33 @@ type Service interface {
 	UnwatchTicket(ctx context.Context, ticketID, userID uint) error
 	GetWatchers(ctx context.Context, ticketID uint) ([]model.TicketWatcher, error)
 	ListAuditLogs(ctx context.Context, resourceType string, resourceID uint, offset, limit int) ([]model.AuditLog, int64, error)
+	CreateTag(ctx context.Context, name, color string) (*model.Tag, error)
+	ListTags(ctx context.Context) ([]model.Tag, error)
+	GetTag(ctx context.Context, id uint) (*model.Tag, error)
+	UpdateTag(ctx context.Context, tag *model.Tag) error
+	DeleteTag(ctx context.Context, id uint) error
+	AddTagsToTicket(ctx context.Context, ticketID uint, tagIDs []uint) error
+	RemoveTagFromTicket(ctx context.Context, ticketID, tagID uint) error
+	GetTicketTags(ctx context.Context, ticketID uint) ([]model.Tag, error)
+	UpdateTicketTags(ctx context.Context, ticketID uint, tagIDs []uint) error
+	GetAssignConfig(ctx context.Context, categoryID *uint) (*model.AssignConfig, error)
+	SetAssignConfig(ctx context.Context, cfg *model.AssignConfig) error
+	CreateTicketRelation(ctx context.Context, ticketID, relatedID uint, relationType string) (*model.TicketRelation, error)
+	DeleteTicketRelation(ctx context.Context, id uint) error
+	ListTicketRelations(ctx context.Context, ticketID uint) ([]model.TicketRelation, error)
+	ListRoles(ctx context.Context) ([]model.Role, error)
+	GetRole(ctx context.Context, id uint) (*model.Role, error)
+	CreateRole(ctx context.Context, role *model.Role) error
+	UpdateRole(ctx context.Context, role *model.Role) error
+	DeleteRole(ctx context.Context, id uint) error
+	ListTicketFields(ctx context.Context) ([]model.TicketField, error)
+	CreateTicketField(ctx context.Context, req *model.CreateTicketFieldRequest) (*model.TicketField, error)
+	UpdateTicketField(ctx context.Context, id uint, req *model.UpdateTicketFieldRequest) (*model.TicketField, error)
+	DeleteTicketField(ctx context.Context, id uint) error
+	UpdateTicketFieldValues(ctx context.Context, ticketID uint, values []model.TicketFieldValue) error
+	GetTicketFieldValues(ctx context.Context, ticketID uint) ([]model.TicketFieldValue, error)
+	GetBotConfig(ctx context.Context, channel string) (*model.BotConfig, error)
+	SetBotConfig(ctx context.Context, cfg *model.BotConfig) error
 }
 
 type service struct {
@@ -146,10 +174,51 @@ func (s *service) DeleteTicket(ctx context.Context, id uint) error {
 }
 
 func (s *service) AutoAssignTicket(ctx context.Context, id uint) (*uint, error) {
-	agentID, err := s.ticketRepo.FindLeastBusyAgent(ctx)
+	ticket, err := s.ticketRepo.GetByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find available agent: %w", err)
+		return nil, err
 	}
+
+	cfg, err := s.ticketRepo.GetAssignConfig(ctx, &ticket.CategoryID)
+	if err != nil || cfg == nil {
+		cfg = &model.AssignConfig{Strategy: model.AssignStrategyLeastBusy}
+	}
+
+	var agentID *uint
+	switch cfg.Strategy {
+	case model.AssignStrategyRoundRobin:
+		ids, err := s.ticketRepo.ListAgentIDs(ctx)
+		if err != nil || len(ids) == 0 {
+			return nil, fmt.Errorf("no available agents found")
+		}
+		idx, _ := s.ticketRepo.IncrementRoundRobin(ctx, cfg.ID, len(ids))
+		agentID = &ids[idx]
+
+	case model.AssignStrategySkillBased:
+		if ticket.CategoryID > 0 {
+			ids, err := s.ticketRepo.FindAgentsBySkill(ctx, ticket.CategoryID)
+			if err == nil && len(ids) > 0 {
+				agentID = &ids[0]
+				break
+			}
+		}
+		fallthrough
+
+	case model.AssignStrategyRandom:
+		ids, err := s.ticketRepo.ListAgentIDs(ctx)
+		if err != nil || len(ids) == 0 {
+			return nil, fmt.Errorf("no available agents found")
+		}
+		agentID = &ids[rand.Intn(len(ids))]
+
+	default: // least_busy
+		id, err := s.ticketRepo.FindLeastBusyAgent(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find available agent: %w", err)
+		}
+		agentID = id
+	}
+
 	if agentID == nil {
 		return nil, fmt.Errorf("no available agents found")
 	}
@@ -219,6 +288,20 @@ func (s *service) UpdateStatus(ctx context.Context, id uint, status string) erro
 	}
 
 	oldStatus := ticket.Status
+	now := time.Now()
+
+	// Transition hooks — auto-set timestamps
+	switch model.TicketStatus(status) {
+	case model.TicketStatusResolved:
+		ticket.ResolvedAt = &now
+	case model.TicketStatusClosed:
+		ticket.ClosedAt = &now
+	}
+	// Clear ResolvedAt when leaving resolved
+	if model.TicketStatus(oldStatus) == model.TicketStatusResolved && status != string(model.TicketStatusResolved) {
+		ticket.ResolvedAt = nil
+	}
+
 	ticket.Status = status
 	if err := s.ticketRepo.Update(ctx, ticket); err != nil {
 		return err
@@ -228,12 +311,26 @@ func (s *service) UpdateStatus(ctx context.Context, id uint, status string) erro
 		map[string]string{"status": oldStatus},
 		map[string]string{"status": status})
 
+	// Notify assignee
 	if ticket.AssigneeID != nil {
 		s.CreateNotification(ctx, *ticket.AssigneeID, "ticket_status",
 			"Status updated: "+ticket.Title,
 			"#"+ticket.TicketNo+" status changed from "+oldStatus+" to "+status,
 			ticket.ID, "ticket")
 	}
+
+	// Notify watchers
+	watchers, _ := s.ticketRepo.GetWatchers(ctx, ticket.ID)
+	for _, w := range watchers {
+		if ticket.AssigneeID != nil && w.UserID == *ticket.AssigneeID {
+			continue // already notified above
+		}
+		s.CreateNotification(ctx, w.UserID, "ticket_status",
+			"Ticket status updated: "+ticket.Title,
+			"#"+ticket.TicketNo+" status changed from "+oldStatus+" to "+status,
+			ticket.ID, "ticket")
+	}
+
 	return nil
 }
 
@@ -490,4 +587,162 @@ func detectContentType(fileName string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+func (s *service) CreateTag(ctx context.Context, name, color string) (*model.Tag, error) {
+	if name == "" {
+		return nil, fmt.Errorf("name is required")
+	}
+	tag := &model.Tag{Name: name, Color: color}
+	if err := s.ticketRepo.CreateTag(ctx, tag); err != nil {
+		return nil, err
+	}
+	return tag, nil
+}
+
+func (s *service) ListTags(ctx context.Context) ([]model.Tag, error) {
+	return s.ticketRepo.ListTags(ctx)
+}
+
+func (s *service) GetTag(ctx context.Context, id uint) (*model.Tag, error) {
+	return s.ticketRepo.GetTag(ctx, id)
+}
+
+func (s *service) UpdateTag(ctx context.Context, tag *model.Tag) error {
+	if tag.ID == 0 {
+		return fmt.Errorf("id is required")
+	}
+	return s.ticketRepo.UpdateTag(ctx, tag)
+}
+
+func (s *service) DeleteTag(ctx context.Context, id uint) error {
+	return s.ticketRepo.DeleteTag(ctx, id)
+}
+
+func (s *service) AddTagsToTicket(ctx context.Context, ticketID uint, tagIDs []uint) error {
+	return s.ticketRepo.AddTagsToTicket(ctx, ticketID, tagIDs)
+}
+
+func (s *service) RemoveTagFromTicket(ctx context.Context, ticketID, tagID uint) error {
+	return s.ticketRepo.RemoveTagFromTicket(ctx, ticketID, tagID)
+}
+
+func (s *service) GetTicketTags(ctx context.Context, ticketID uint) ([]model.Tag, error) {
+	return s.ticketRepo.GetTicketTags(ctx, ticketID)
+}
+
+func (s *service) UpdateTicketTags(ctx context.Context, ticketID uint, tagIDs []uint) error {
+	return s.ticketRepo.UpdateTicketTags(ctx, ticketID, tagIDs)
+}
+
+func (s *service) GetAssignConfig(ctx context.Context, categoryID *uint) (*model.AssignConfig, error) {
+	return s.ticketRepo.GetAssignConfig(ctx, categoryID)
+}
+
+func (s *service) SetAssignConfig(ctx context.Context, cfg *model.AssignConfig) error {
+	return s.ticketRepo.SetAssignConfig(ctx, cfg)
+}
+
+func (s *service) CreateTicketRelation(ctx context.Context, ticketID, relatedID uint, relationType string) (*model.TicketRelation, error) {
+	if ticketID == relatedID {
+		return nil, fmt.Errorf("cannot relate a ticket to itself")
+	}
+	rel := &model.TicketRelation{
+		TicketID:     ticketID,
+		RelatedID:    relatedID,
+		RelationType: relationType,
+	}
+	if err := s.ticketRepo.CreateTicketRelation(ctx, rel); err != nil {
+		return nil, err
+	}
+	return rel, nil
+}
+
+func (s *service) DeleteTicketRelation(ctx context.Context, id uint) error {
+	return s.ticketRepo.DeleteTicketRelation(ctx, id)
+}
+
+func (s *service) ListTicketRelations(ctx context.Context, ticketID uint) ([]model.TicketRelation, error) {
+	return s.ticketRepo.ListTicketRelations(ctx, ticketID)
+}
+
+func (s *service) ListRoles(ctx context.Context) ([]model.Role, error) {
+	return s.ticketRepo.ListRoles(ctx)
+}
+
+func (s *service) GetRole(ctx context.Context, id uint) (*model.Role, error) {
+	return s.ticketRepo.GetRole(ctx, id)
+}
+
+func (s *service) CreateRole(ctx context.Context, role *model.Role) error {
+	return s.ticketRepo.CreateRole(ctx, role)
+}
+
+func (s *service) UpdateRole(ctx context.Context, role *model.Role) error {
+	return s.ticketRepo.UpdateRole(ctx, role)
+}
+
+func (s *service) DeleteRole(ctx context.Context, id uint) error {
+	return s.ticketRepo.DeleteRole(ctx, id)
+}
+
+func (s *service) ListTicketFields(ctx context.Context) ([]model.TicketField, error) {
+	return s.ticketRepo.ListTicketFields(ctx)
+}
+
+func (s *service) CreateTicketField(ctx context.Context, req *model.CreateTicketFieldRequest) (*model.TicketField, error) {
+	field := &model.TicketField{
+		Name:        req.Name,
+		FieldKey:    req.FieldKey,
+		FieldType:   req.FieldType,
+		Options:     req.Options,
+		Required:    req.Required,
+		SortOrder:   req.SortOrder,
+		Placeholder: req.Placeholder,
+	}
+	if err := s.ticketRepo.CreateTicketField(ctx, field); err != nil {
+		return nil, err
+	}
+	return field, nil
+}
+
+func (s *service) UpdateTicketField(ctx context.Context, id uint, req *model.UpdateTicketFieldRequest) (*model.TicketField, error) {
+	existing, err := s.ticketRepo.GetTicketField(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if existing == nil {
+		return nil, fmt.Errorf("ticket field not found")
+	}
+	if req.Name != nil { existing.Name = *req.Name }
+	if req.FieldType != nil { existing.FieldType = *req.FieldType }
+	if req.Options != nil { existing.Options = *req.Options }
+	if req.Required != nil { existing.Required = *req.Required }
+	if req.SortOrder != nil { existing.SortOrder = *req.SortOrder }
+	if req.Placeholder != nil { existing.Placeholder = *req.Placeholder }
+	if req.Enabled != nil { existing.Enabled = *req.Enabled }
+	if err := s.ticketRepo.UpdateTicketField(ctx, existing); err != nil {
+		return nil, err
+	}
+	return existing, nil
+}
+
+func (s *service) DeleteTicketField(ctx context.Context, id uint) error {
+	return s.ticketRepo.DeleteTicketField(ctx, id)
+}
+
+func (s *service) UpdateTicketFieldValues(ctx context.Context, ticketID uint, values []model.TicketFieldValue) error {
+	return s.ticketRepo.SetTicketFieldValues(ctx, ticketID, values)
+}
+
+func (s *service) GetTicketFieldValues(ctx context.Context, ticketID uint) ([]model.TicketFieldValue, error) {
+	return s.ticketRepo.GetTicketFieldValues(ctx, ticketID)
+}
+
+func (s *service) GetBotConfig(ctx context.Context, channel string) (*model.BotConfig, error) {
+	return s.ticketRepo.GetBotConfig(ctx, channel)
+}
+
+func (s *service) SetBotConfig(ctx context.Context, cfg *model.BotConfig) error {
+	return s.ticketRepo.SetBotConfig(ctx, cfg)
 }

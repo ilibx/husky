@@ -23,13 +23,17 @@ type VectorStoreRepository interface {
 	// GetKnowledge 获取单个知识条目
 	GetKnowledge(ctx context.Context, id string) (*model.KnowledgeBase, error)
 	// ListKnowledge 获取知识条目列表
-	ListKnowledge(ctx context.Context, offset, limit int) ([]model.KnowledgeBase, int64, error)
+	ListKnowledge(ctx context.Context, offset, limit int, category string) ([]model.KnowledgeBase, int64, error)
 	// SearchSimilar 搜索相似知识
 	SearchSimilar(ctx context.Context, query model.KnowledgeQuery, queryVector []float32) ([]model.KnowledgeResponse, error)
 	// DeleteKnowledge 删除知识库条目
 	DeleteKnowledge(ctx context.Context, id string) error
 	// UpdateKnowledge 更新知识库条目
 	UpdateKnowledge(ctx context.Context, kb *model.KnowledgeBase) error
+	// IncrementViewCount 增加浏览次数
+	IncrementViewCount(ctx context.Context, id string) error
+	// ListHotKnowledge 获取热门知识
+	ListHotKnowledge(ctx context.Context, limit int) ([]model.KnowledgeHotResponse, error)
 }
 
 type vectorStoreRepository struct {
@@ -152,11 +156,14 @@ func (r *vectorStoreRepository) GetKnowledge(ctx context.Context, id string) (*m
 }
 
 // ListKnowledge 获取知识条目列表
-func (r *vectorStoreRepository) ListKnowledge(ctx context.Context, offset, limit int) ([]model.KnowledgeBase, int64, error) {
+func (r *vectorStoreRepository) ListKnowledge(ctx context.Context, offset, limit int, category string) ([]model.KnowledgeBase, int64, error) {
 	var list []model.KnowledgeBase
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&model.KnowledgeBase{})
+	if category != "" {
+		query = query.Where("category = ?", category)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -177,4 +184,25 @@ func (r *vectorStoreRepository) DeleteKnowledge(ctx context.Context, id string) 
 // UpdateKnowledge 更新知识库条目
 func (r *vectorStoreRepository) UpdateKnowledge(ctx context.Context, kb *model.KnowledgeBase) error {
 	return r.db.WithContext(ctx).Save(kb).Error
+}
+
+func (r *vectorStoreRepository) IncrementViewCount(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Model(&model.KnowledgeBase{}).
+		Where("id = ?", id).
+		UpdateColumn("view_count", gorm.Expr("view_count + 1")).
+		UpdateColumn("hot_score", gorm.Expr("hot_score + 1.0 / (EXTRACT(EPOCH FROM NOW() - created_at) / 3600 + 1)")).
+		Error
+}
+
+func (r *vectorStoreRepository) ListHotKnowledge(ctx context.Context, limit int) ([]model.KnowledgeHotResponse, error) {
+	var results []model.KnowledgeHotResponse
+	if err := r.db.WithContext(ctx).Model(&model.KnowledgeBase{}).
+		Where("status = ?", "active").
+		Order("hot_score DESC").
+		Limit(limit).
+		Select("id, title, content, language, category, view_count, hot_score").
+		Find(&results).Error; err != nil {
+		return nil, err
+	}
+	return results, nil
 }

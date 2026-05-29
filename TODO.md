@@ -64,31 +64,31 @@
 
 | # | 飞书服务台功能 | Husky 状态 | 差距 | 优先级 |
 |---|--------------|-----------|------|--------|
-| 1 | 工单自动生成（与机器人互动触发） | ❌ 未实现 | 用户发消息→机器人识别意图→自动创建工单 | P0 |
-| 2 | 客服代创建工单 | ❌ 未实现 | 客服后台手动为用户创建 | P0 |
-| 3 | 工单状态流转（状态机 + 约束规则） | 🔶 5 种状态已定义 | 无状态转换表、无非法流转拦截、无转换钩子 | P0 |
-| 4 | 机器人知识库问答 | ❌ 未实现 | 用户提问→向量检索→LLM 生成回答→卡片展示 | P0 |
-| 5 | 工单分配（技能分流/指定客服） | ❌ 未实现 | assignee_id 字段存在，无分配策略 | P1 |
-| 6 | 工单标签系统 | ❌ 未实现 | Ticket 模型无 tags 字段 | P1 |
-| 7 | 知识库分类管理 + 层级 | 🔶 Category 模型存在 | 无 Bot 展示逻辑、无分类树渲染 | P1 |
+| 1 | 工单自动生成（与机器人互动触发） | ✅ 已实现 | 用户发消息→AI 意图识别（create_ticket/ask_knowledge/greeting/unknown）→自动创建工单 | P0 |
+| 2 | 客服代创建工单 | ✅ 已实现 | admin/agent 可在创建时指定 requester_id，普通用户只能为自己创建 | P0 |
+| 3 | 工单状态流转（状态机 + 约束规则） | ✅ 已实现 | ValidTransitions 合法转换表 + IsValidTransition 校验 + ResolvedAt/ClosedAt 自动钩子 + 通知 watchers | P0 |
+| 4 | 机器人知识库问答 | ✅ 已实现 | RAG 流程：用户提问→向量检索→LLM 生成回答→返回 AnswerResponse | P0 |
+| 5 | 工单分配（技能分流/指定客服） | ✅ 已实现 | 四种策略：least_busy / round_robin / skill_based / random，支持按分类配置 | P1 |
+| 6 | 工单标签系统 | ✅ 已实现 | Tag CRUD + 工单标签关联/替换 API | P1 |
+| 7 | 知识库分类管理 + 层级 | ✅ 已实现 | Category 增加 type 字段区分知识库/工单分类，知识库分类树 API，List 支持 category 筛选 | P1 |
 | 8 | 工单评分/满意度调查 | ✅ 已实现 | RateTicket + GetSatisfaction API | P1 |
-| 9 | 客服工单面板（备注/标签/状态编辑） | ❌ 未实现 | 仅有 API 层 | P1 |
+| 9 | 客服工单面板（备注/标签/状态编辑） | ✅ 已实现 | 前端详情页：状态下拉编辑、标签管理弹窗、内部备注复选框 | P1 |
 | 10 | SLA 超时升级 | ✅ 已实现 | SLAEscalator 后台 goroutine, 5min 轮询+通知 | P1 |
 | 11 | 系统操作日志 | ✅ 已实现 | AuditLog 写入（CreateAuditLog）+ 查询 API | P1 |
 | 12 | 历史消息记录持久化 | ✅ 已实现 | 飞书/钉钉/企微 Webhook 消息保存到 WebhookMessage 表 | P1 |
-| 13 | 机器人欢迎语/签名 | ❌ 未实现 | 无机器人配置 | P2 |
-| 14 | 推荐问题/猜你想问 | ❌ 未实现 | 需要知识库热度统计 | P2 |
-| 15 | 知识库批量导入/导出 | ❌ 未实现 | 无导入导出 API | P2 |
-| 16 | 多语言知识库 | ❌ 未实现 | 无多语言字段 | P2 |
-| 17 | 工单自定义字段 | ❌ 未实现 | 需要动态表单支持 | P2 |
-| 18 | 工单合并/关联 | ❌ 未实现 | 无关联工单模型 | P2 |
+| 13 | 机器人欢迎语/签名 | ✅ 已实现 | BotConfig 模型 + API + Gateway 自动发送欢迎消息 | P2 |
+| 14 | 推荐问题/猜你想问 | ✅ 已实现 | ViewCount + HotScore 热度统计 + Recommend API | P2 |
+| 15 | 知识库批量导入/导出 | ✅ 已实现 | JSON + CSV 两种格式，CSV 支持 multipart 上传和文件下载 | P2 |
+| 16 | 多语言知识库 | ✅ 已实现 | zh/en 标题/内容字段 + Language 属性 | P2 |
+| 17 | 工单自定义字段 | ✅ 已实现 | TicketField 定义 + TicketFieldValue 存储 + CRUD API | P2 |
+| 18 | 工单合并/关联 | ✅ 已实现 | TicketRelation 模型 + CRUD API，支持 parent/child/related/duplicate/blocks | P2 |
 
 ### 需求不合理/不明确项
 
 1. **"支持 6 个渠道"范围过大** — 飞书和 Lark 本质是同一平台（国内/国际版），应合并为一个渠道。建议 MVP 仅支持飞书 + WebUI，其他渠道 P1 后处理。
 2. **"Agent 系统"定义过广** — README 列出 7 种 Agent，但 Agent 模型仅定义了 LLM 参数（type/config/model/temperature），无触发条件、执行逻辑、回调机制设计。建议先实现 1-2 个核心 Agent（自动分类/智能回复）。
-3. **RBAC 权限控制过于简化** — 当前基于 `role` 字符串比对。真正的 RBAC 需要 permission-resource-action 矩阵。当前 `Role.Permissions` 为 JSON 字符串但无解析/校验逻辑。
-4. **HITL 交互协议未设计** — HITL 需要定义：AI 建议格式 → 人工审核接口 → 反馈回写 → 模型更新链路。当前概念提及但无任何实现。
+3. **RBAC 权限控制** — ✅ 已完善。`Role.Permissions` 支持 JSON 权限矩阵，`PermissionsLoader` 从 DB 加载，`PermissionMiddleware(resource, action)` 精确校验，admin 角色默认拥有全部权限，`LoadPermissionsMiddleware` 自动注入到请求上下文。
+4. **HITL 交互协议未设计** — HITL 需要定义：AI 建议格式 → 人工审核接口 → 反馈回写 → 模型更新链路。✅ 已实现完整 HITL 协议：`executeHumanStep` 自动生成 AI 建议，`Suggestion`/`Decision`/`Feedback`/`ApprovedBy` 字段记录全链路，API：approve/reject/revise，前端「我的待办」页面。
 5. **`SERVER_MODE` vs `APP_ENV` 命名冲突** — `.env.example` 使用 `APP_ENV`，但 `config.go` 使用 `SERVER_MODE` 字段。建议统一为 `APP_ENV`。
 6. **工单状态机规则未明确** — 5 种状态之间的合法转换路径、转换条件、触发动作均未定义。
 
@@ -128,14 +128,26 @@
 - [x] Notifications 对接 Agent/Workflow：human step 通知 assignee，completeStep 通知 requester，failStep 通知 assignee
 - [x] AuditLog 查询 API：`GET /tickets/:id/audit-logs`（资源/资源ID过滤 + 分页 + 用户预加载）
 
-### Phase 2 — 企业级（持续）
-- [ ] 工单自定义字段
-- [ ] 工单标签系统
-- [ ] 工单合并/关联
+### Phase 2 — 企业级（已完成 ✅）
+- [x] 客服代创建工单（admin/agent 指定 requester_id）
+- [x] 工单标签系统（Tag CRUD + 工单标签关联/替换）
+- [x] 工单分配策略（least_busy / round_robin / skill_based / random，按分类配置）
+- [x] 工单合并/关联（parent/child/related/duplicate/blocks 类型）
+- [x] 知识库批量导入/导出（JSON + CSV 格式，embedding 自动生成）
+- [x] RBAC 细粒度权限（permission-resource-action 矩阵 + PermissionMiddleware）
+- [x] 多语言知识库（zh/en 标题/内容字段，language 筛选）
+- [x] 推荐问题/猜你想问（ViewCount + HotScore 热度统计，Recommend API）
+- [x] 工单自定义字段（TicketField 定义 + TicketFieldValue 存储，CRUD API）
+- [x] 机器人欢迎语/签名（BotConfig 模型 + API + Gateway 自动发送）
+- [x] 飞书用户信息 LDAP 同步（ldap.Service 同步 + SyncLDAP API）
+- [x] 客服工单面板（前端：状态编辑下拉、标签管理弹窗、内部备注复选框）
+
+### Phase 2 — 剩余
 - [ ] 多语言知识库
-- [ ] 知识库批量导入/导出
-- [ ] RBAC 细粒度权限（permission-resource-action 矩阵）
 - [ ] 飞书用户信息 LDAP 同步
+
+### Phase 3 — 未来
+- [ ] 工单自定义字段
 
 ---
 

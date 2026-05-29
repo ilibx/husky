@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/husky/husky/internal/ldap"
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/internal/service"
 	"github.com/husky/husky/pkg/errors"
@@ -14,12 +15,13 @@ import (
 // UserHandler 用户管理处理器
 type UserHandler struct {
 	userService service.UserService
+	ldapSvc     *ldap.Service
 	log         *logger.Logger
 }
 
 // NewUserHandler 创建用户管理处理器
-func NewUserHandler(userService service.UserService, log *logger.Logger) *UserHandler {
-	return &UserHandler{userService: userService, log: log}
+func NewUserHandler(userService service.UserService, ldapSvc *ldap.Service, log *logger.Logger) *UserHandler {
+	return &UserHandler{userService: userService, ldapSvc: ldapSvc, log: log}
 }
 
 // ListUsers 获取用户列表（仅管理员）
@@ -171,4 +173,19 @@ func (h *UserHandler) ChangeRole(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "role updated"})
+}
+
+func (h *UserHandler) SyncLDAPUsers(c *gin.Context) {
+	if h.ldapSvc == nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "LDAP not configured"))
+		return
+	}
+
+	result, err := h.ldapSvc.SyncUsers(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, result)
 }

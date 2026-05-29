@@ -52,6 +52,15 @@ type Config struct {
 	// 管理后台配置
 	AdminMode string // embedded, external; default embedded
 	AdminURL string  // external URL for admin UI, e.g. http://localhost:5173
+
+	// LDAP 配置
+	LDAPHost     string
+	LDAPPort     int
+	LDAPBindDN   string
+	LDAPPassword string
+	LDAPBaseDN   string
+	LDAPFilter   string
+	LDAPFieldMap string // JSON: {"cn":"username","mail":"email","telephoneNumber":"phone"}
 }
 
 // Conf 全局配置实例
@@ -99,6 +108,13 @@ func LoadConfig() (*Config, error) {
 		FeishuAppSecret: getEnv("FEISHU_APP_SECRET", ""),
 		AdminMode:       getEnv("ADMIN_MODE", "embedded"),
 		AdminURL:        getEnv("ADMIN_URL", "http://localhost:5173"),
+		LDAPHost:        getEnv("LDAP_HOST", ""),
+		LDAPPort:        getEnvAsInt("LDAP_PORT", 389),
+		LDAPBindDN:      getEnv("LDAP_BIND_DN", ""),
+		LDAPPassword:    getEnv("LDAP_PASSWORD", ""),
+		LDAPBaseDN:      getEnv("LDAP_BASE_DN", ""),
+		LDAPFilter:      getEnv("LDAP_FILTER", "(objectClass=person)"),
+		LDAPFieldMap:    getEnv("LDAP_FIELD_MAP", `{"cn":"username","mail":"email"}`),
 	}
 
 	// 验证必要配置

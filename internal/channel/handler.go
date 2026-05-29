@@ -123,6 +123,11 @@ func (h *Handler) LarkWebhook(c *gin.Context) {
 		return
 	}
 
+	if ticket == nil {
+		c.JSON(http.StatusOK, model.LarkCallbackResponse{Success: true})
+		return
+	}
+
 	h.saveWebhookRecord(c, "lark", msg, &ticket.ID)
 
 	c.JSON(http.StatusOK, model.LarkCallbackResponse{
@@ -168,6 +173,11 @@ func (h *Handler) DingTalkWebhook(c *gin.Context) {
 		return
 	}
 
+	if ticket == nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "bot_reply": true})
+		return
+	}
+
 	h.saveWebhookRecord(c, "dingtalk", msg, &ticket.ID)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -210,6 +220,11 @@ func (h *Handler) WeComWebhook(c *gin.Context) {
 	if err != nil {
 		h.log.Error("Failed to create ticket from WeCom message", "error", err)
 		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, "failed to create ticket"))
+		return
+	}
+
+	if ticket == nil {
+		c.JSON(http.StatusOK, gin.H{"success": true, "bot_reply": true})
 		return
 	}
 

@@ -352,13 +352,24 @@ func (s *WorkflowService) selectAgent(ctx context.Context, step *model.WorkflowS
 }
 
 func (s *WorkflowService) executeHumanStep(ctx context.Context, step *model.WorkflowStep, ticket *model.Ticket) {
+	// 1. 生成 AI 建议（从知识库检索 + LLM 生成）
+	suggestion := s.generateSuggestion(ctx, ticket, step)
+	step.Suggestion = suggestion
+	step.Status = "running"
+	now := time.Now()
+	step.StartedAt = &now
+	s.wfRepo.UpdateStep(ctx, step)
+
+	// 2. 在工单中添加 AI 建议备注
+	commentContent := fmt.Sprintf("[HITL] 需要人工审核: %s\n---\nAI 建议:\n%s", step.Name, suggestion)
 	s.ticketRepo.AddComment(ctx, &model.Comment{
 		TicketID:   ticket.ID,
 		UserID:     AgentUserID,
-		Content:    fmt.Sprintf("Requires human processing: %s", step.Name),
+		Content:    commentContent,
 		IsInternal: true,
 	})
 
+	// 3. 通知负责人
 	notifyUserID := uint(0)
 	if step.AssigneeID != nil {
 		notifyUserID = *step.AssigneeID
@@ -366,12 +377,14 @@ func (s *WorkflowService) executeHumanStep(ctx context.Context, step *model.Work
 		notifyUserID = *ticket.AssigneeID
 	}
 	if notifyUserID > 0 {
+		notificationContent := fmt.Sprintf("工单 #%s 需要您审核\n步骤: %s\n\nAI 建议:\n%s", ticket.TicketNo, step.Name, suggestion)
 		s.createNotification(ctx, notifyUserID, "workflow",
-			fmt.Sprintf("需要进行人工处理: %s", step.Name),
-			fmt.Sprintf("工单 #%s 需要您进行人工处理，步骤: %s", ticket.TicketNo, step.Name),
+			fmt.Sprintf("需要审核: %s", step.Name),
+			notificationContent,
 			ticket.ID, "ticket")
 	}
 
+	// 4. 超时处理
 	var cfg struct {
 		TimeoutMinutes int `json:"timeout_minutes"`
 	}
@@ -394,6 +407,57 @@ func (s *WorkflowService) executeHumanStep(ctx context.Context, step *model.Work
 		case <-ctx.Done():
 		}
 	}(step.ID, time.Duration(cfg.TimeoutMinutes)*time.Minute)
+}
+
+// generateSuggestion 基于知识库和工单上下文生成 AI 建议
+func (s *WorkflowService) generateSuggestion(ctx context.Context, ticket *model.Ticket, step *model.WorkflowStep) string {
+	if s.kbRepo == nil {
+		return "请人工处理此步骤。"
+	}
+
+	query := model.KnowledgeQuery{
+		Query: fmt.Sprintf("%s %s %s", ticket.Title, ticket.Description, step.Name),
+		Limit: 3,
+	}
+
+	results, err := s.kbRepo.SearchSimilar(ctx, query, nil)
+	if err != nil || len(results) == 0 {
+		return "未找到相关知识库建议，请根据实际情况处理。"
+	}
+
+	if s.chatSvc == nil {
+		// 无 LLM，直接返回最相关知识
+		return fmt.Sprintf("相关参考:\n%s\n---\n%s", results[0].Title, results[0].Content)
+	}
+
+	contextStr := ""
+	for i, r := range results {
+		contextStr += fmt.Sprintf("[%d] %s\n%s\n\n", i+1, r.Title, r.Content)
+	}
+
+	prompt := fmt.Sprintf(`你是一个工单处理助手。工单 #%s 当前需要执行步骤 "%s"。
+
+工单标题: %s
+工单描述: %s
+
+知识库参考:
+%s
+
+请基于以上信息，给出具体的处理建议和操作步骤。`, ticket.TicketNo, step.Name, ticket.Title, ticket.Description, contextStr)
+
+	chatResp, err := s.chatSvc.Chat(ctx, &llm.ChatRequest{
+		Messages: []llm.ChatMessage{
+			{Role: "system", Content: "你是一个专业的工单处理助手，基于知识库给出具体的处理建议。"},
+			{Role: "user", Content: prompt},
+		},
+		Temperature: 0.3,
+		MaxTokens:   1024,
+	})
+	if err != nil {
+		return fmt.Sprintf("相关参考:\n%s\n---\n%s", results[0].Title, results[0].Content)
+	}
+
+	return chatResp.Content
 }
 
 func (s *WorkflowService) executeConditionStep(ctx context.Context, step *model.WorkflowStep, ticket *model.Ticket) {
@@ -571,6 +635,106 @@ func (s *WorkflowService) ListWorkflows(ctx context.Context, offset, limit int, 
 
 func (s *WorkflowService) ListPendingSteps(ctx context.Context, userID uint, offset, limit int) ([]model.WorkflowStep, int64, error) {
 	return s.wfRepo.ListStepsByAssignee(ctx, userID, offset, limit)
+}
+
+// ApproveStep 审核通过，记录 feedback 并继续工作流
+func (s *WorkflowService) ApproveStep(ctx context.Context, stepID, userID uint, feedback, result string) error {
+	step, err := s.wfRepo.GetStepByID(ctx, stepID)
+	if err != nil {
+		return err
+	}
+	if step.Type != "human" {
+		return fmt.Errorf("step %d is not a human step", stepID)
+	}
+	if step.Status != "running" {
+		return fmt.Errorf("step %d is not in running state", stepID)
+	}
+
+	step.Decision = "approve"
+	step.Feedback = feedback
+	step.ApprovedBy = &userID
+
+	finalResult := result
+	if finalResult == "" {
+		finalResult = feedback
+		if finalResult == "" {
+			finalResult = step.Suggestion
+		}
+	}
+
+	s.completeStep(ctx, step, finalResult)
+	return nil
+}
+
+// RejectStep 拒绝，记录原因
+func (s *WorkflowService) RejectStep(ctx context.Context, stepID, userID uint, reason string) error {
+	step, err := s.wfRepo.GetStepByID(ctx, stepID)
+	if err != nil {
+		return err
+	}
+	if step.Type != "human" {
+		return fmt.Errorf("step %d is not a human step", stepID)
+	}
+	if step.Status != "running" {
+		return fmt.Errorf("step %d is not in running state", stepID)
+	}
+
+	step.Decision = "reject"
+	step.RejectionReason = reason
+	step.ApprovedBy = &userID
+	now := time.Now()
+	step.Status = "failed"
+	step.Result = fmt.Sprintf("rejected: %s", reason)
+	step.CompletedAt = &now
+	s.wfRepo.UpdateStep(ctx, step)
+
+	wf, _ := s.wfRepo.GetByID(ctx, step.WorkflowID)
+	if wf != nil {
+		wf.Status = "failed"
+		s.wfRepo.Update(ctx, wf)
+
+		if userID > 0 {
+			s.createNotification(ctx, userID, "workflow",
+				fmt.Sprintf("步骤被拒绝: %s", step.Name),
+				fmt.Sprintf("拒绝原因: %s", reason),
+				wf.TicketID, "ticket")
+		}
+	}
+
+	return nil
+}
+
+// ReviseStep 打回修改，重置步骤状态为 pending 等待 AI 重新建议
+func (s *WorkflowService) ReviseStep(ctx context.Context, stepID, userID uint, feedback string) error {
+	step, err := s.wfRepo.GetStepByID(ctx, stepID)
+	if err != nil {
+		return err
+	}
+	if step.Type != "human" {
+		return fmt.Errorf("step %d is not a human step", stepID)
+	}
+	if step.Status != "running" {
+		return fmt.Errorf("step %d is not in running state", stepID)
+	}
+
+	step.Decision = "revise"
+	step.Feedback = feedback
+	step.ApprovedBy = &userID
+	step.Status = "pending"
+	step.Suggestion = ""
+	step.StartedAt = nil
+	s.wfRepo.UpdateStep(ctx, step)
+
+	if userID > 0 {
+		s.createNotification(ctx, userID, "workflow",
+			fmt.Sprintf("步骤需重新处理: %s", step.Name),
+			fmt.Sprintf("修改意见: %s", feedback),
+			step.WorkflowID, "workflow")
+	}
+
+	// 重新执行（AI 重新生成建议）
+	go s.executeStep(context.Background(), step, nil)
+	return nil
 }
 
 func (s *WorkflowService) createNotification(ctx context.Context, userID uint, nType, title, content string, refID uint, refType string) {

@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -9,6 +10,18 @@ import (
 	"github.com/husky/husky/internal/config"
 	"github.com/husky/husky/pkg/errors"
 )
+
+// PermissionsLoader 权限加载接口（由 router 注入）
+type PermissionsLoader interface {
+	GetRolePermissions(ctx context.Context, role string) (map[string]bool, error)
+}
+
+var permissionsLoader PermissionsLoader
+
+// SetPermissionsLoader 设置权限加载器
+func SetPermissionsLoader(loader PermissionsLoader) {
+	permissionsLoader = loader
+}
 
 // Claims JWT 声明
 type Claims struct {
@@ -65,7 +78,7 @@ func AuthMiddleware() gin.HandlerFunc {
 	}
 }
 
-// RBACMiddleware RBAC 权限控制中间件
+// RBACMiddleware RBAC 权限控制中间件（角色字符串匹配）
 func RBACMiddleware(requiredRoles ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		role, exists := c.Get("role")
@@ -94,6 +107,31 @@ func RBACMiddleware(requiredRoles ...string) gin.HandlerFunc {
 			return
 		}
 
+		c.Next()
+	}
+}
+
+// LoadPermissionsMiddleware 从 DB 加载角色权限到上下文
+func LoadPermissionsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if permissionsLoader == nil {
+			c.Next()
+			return
+		}
+
+		role, exists := c.Get("role")
+		if !exists {
+			c.Next()
+			return
+		}
+
+		perms, err := permissionsLoader.GetRolePermissions(c.Request.Context(), role.(string))
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		c.Set("permissions", perms)
 		c.Next()
 	}
 }

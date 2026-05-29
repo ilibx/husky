@@ -55,6 +55,17 @@ func (r *CategoryRepository) List(ctx context.Context) ([]model.Category, error)
 	return list, err
 }
 
+// ListByType 按类型查询分类
+func (r *CategoryRepository) ListByType(ctx context.Context, categoryType string) ([]model.Category, error) {
+	var list []model.Category
+	query := r.db.WithContext(ctx).Order("sort_order ASC, id ASC")
+	if categoryType != "" {
+		query = query.Where("type = ? OR type = 'both'", categoryType)
+	}
+	err := query.Find(&list).Error
+	return list, err
+}
+
 func (r *CategoryRepository) Update(ctx context.Context, cat *model.Category) error {
 	return r.db.WithContext(ctx).Save(cat).Error
 }
@@ -728,6 +739,456 @@ func (r *TicketRepository) GetTicketGroupByGroupID(ctx context.Context, groupID 
 		return nil, err
 	}
 	return &tg, nil
+}
+
+// CreateTag 创建标签
+func (r *TicketRepository) CreateTag(ctx context.Context, tag *model.Tag) error {
+	return r.db.WithContext(ctx).Create(tag).Error
+}
+
+// ListTags 获取所有标签
+func (r *TicketRepository) ListTags(ctx context.Context) ([]model.Tag, error) {
+	var list []model.Tag
+	if err := r.db.WithContext(ctx).Order("name ASC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// GetTag 获取单个标签
+func (r *TicketRepository) GetTag(ctx context.Context, id uint) (*model.Tag, error) {
+	var tag model.Tag
+	if err := r.db.WithContext(ctx).First(&tag, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &tag, nil
+}
+
+// UpdateTag 更新标签
+func (r *TicketRepository) UpdateTag(ctx context.Context, tag *model.Tag) error {
+	return r.db.WithContext(ctx).Save(tag).Error
+}
+
+// DeleteTag 删除标签（自动清理关联）
+func (r *TicketRepository) DeleteTag(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("tag_id = ?", id).Delete(&model.TicketTag{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.Tag{}, id).Error
+	})
+}
+
+// AddTagsToTicket 为工单添加标签
+func (r *TicketRepository) AddTagsToTicket(ctx context.Context, ticketID uint, tagIDs []uint) error {
+	for _, tagID := range tagIDs {
+		tt := model.TicketTag{TicketID: ticketID, TagID: tagID}
+		if err := r.db.WithContext(ctx).FirstOrCreate(&tt, tt).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RemoveTagFromTicket 移除工单标签
+func (r *TicketRepository) RemoveTagFromTicket(ctx context.Context, ticketID, tagID uint) error {
+	return r.db.WithContext(ctx).Where("ticket_id = ? AND tag_id = ?", ticketID, tagID).
+		Delete(&model.TicketTag{}).Error
+}
+
+// GetTicketTags 获取工单标签列表
+func (r *TicketRepository) GetTicketTags(ctx context.Context, ticketID uint) ([]model.Tag, error) {
+	var tagIDs []uint
+	if err := r.db.WithContext(ctx).Model(&model.TicketTag{}).
+		Where("ticket_id = ?", ticketID).Pluck("tag_id", &tagIDs).Error; err != nil {
+		return nil, err
+	}
+	if len(tagIDs) == 0 {
+		return nil, nil
+	}
+	var tags []model.Tag
+	if err := r.db.WithContext(ctx).Find(&tags, tagIDs).Error; err != nil {
+		return nil, err
+	}
+	return tags, nil
+}
+
+// UpdateTicketTags 替换工单的所有标签
+func (r *TicketRepository) UpdateTicketTags(ctx context.Context, ticketID uint, tagIDs []uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("ticket_id = ?", ticketID).Delete(&model.TicketTag{}).Error; err != nil {
+			return err
+		}
+		for _, tagID := range tagIDs {
+			if err := tx.Create(&model.TicketTag{TicketID: ticketID, TagID: tagID}).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// GetAssignConfig 获取分配配置（按分类，无则返回全局）
+func (r *TicketRepository) GetAssignConfig(ctx context.Context, categoryID *uint) (*model.AssignConfig, error) {
+	var cfg model.AssignConfig
+	query := r.db.WithContext(ctx).Model(&model.AssignConfig{})
+	if categoryID != nil {
+		query = query.Where("category_id = ?", *categoryID)
+	} else {
+		query = query.Where("category_id IS NULL")
+	}
+	err := query.First(&cfg).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+// SetAssignConfig 设置分配配置
+func (r *TicketRepository) SetAssignConfig(ctx context.Context, cfg *model.AssignConfig) error {
+	query := r.db.WithContext(ctx).Model(&model.AssignConfig{})
+	if cfg.CategoryID != nil {
+		query = query.Where("category_id = ?", *cfg.CategoryID)
+	} else {
+		query = query.Where("category_id IS NULL")
+	}
+	var existing model.AssignConfig
+	if err := query.First(&existing).Error; err == nil {
+		cfg.ID = existing.ID
+		cfg.CreatedAt = existing.CreatedAt
+		return r.db.WithContext(ctx).Save(cfg).Error
+	}
+	return r.db.WithContext(ctx).Create(cfg).Error
+}
+
+// ListAgentIDs 获取所有活跃客服/管理员ID
+func (r *TicketRepository) ListAgentIDs(ctx context.Context) ([]uint, error) {
+	var ids []uint
+	err := r.db.WithContext(ctx).Model(&model.User{}).
+		Where("role IN ? AND status = 1", []string{"admin", "agent"}).
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
+// CountAgentLoad 统计客服当前进行中工单数
+func (r *TicketRepository) CountAgentLoad(ctx context.Context, agentID uint) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&model.Ticket{}).
+		Where("assignee_id = ? AND status NOT IN ('resolved', 'closed')", agentID).
+		Count(&count).Error
+	return count, err
+}
+
+// FindAgentsBySkill 根据技能匹配客服（分类名模糊匹配）
+func (r *TicketRepository) FindAgentsBySkill(ctx context.Context, categoryID uint) ([]uint, error) {
+	var cat model.Category
+	if err := r.db.WithContext(ctx).First(&cat, categoryID).Error; err != nil {
+		return nil, err
+	}
+	var ids []uint
+	err := r.db.WithContext(ctx).Model(&model.User{}).
+		Where("role IN ? AND status = 1 AND skills ILIKE ?", []string{"admin", "agent"}, "%"+cat.Name+"%").
+		Pluck("id", &ids).Error
+	return ids, err
+}
+
+// IncrementRoundRobin 递增轮询并返回新索引
+func (r *TicketRepository) IncrementRoundRobin(ctx context.Context, cfgID uint, maxIndex int) (int, error) {
+	err := r.db.WithContext(ctx).Model(&model.AssignConfig{}).
+		Where("id = ?", cfgID).
+		UpdateColumn("round_robin_index", gorm.Expr("(round_robin_index + 1) % ?", maxIndex)).
+		Error
+	if err != nil {
+		return 0, err
+	}
+	var cfg model.AssignConfig
+	r.db.WithContext(ctx).First(&cfg, cfgID)
+	return cfg.RoundRobinIndex, nil
+}
+
+// CreateTicketRelation 创建工单关联
+func (r *TicketRepository) CreateTicketRelation(ctx context.Context, rel *model.TicketRelation) error {
+	return r.db.WithContext(ctx).Create(rel).Error
+}
+
+// DeleteTicketRelation 删除工单关联
+func (r *TicketRepository) DeleteTicketRelation(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&model.TicketRelation{}, id).Error
+}
+
+// ListTicketRelations 获取工单关联列表
+func (r *TicketRepository) ListTicketRelations(ctx context.Context, ticketID uint) ([]model.TicketRelation, error) {
+	var list []model.TicketRelation
+	err := r.db.WithContext(ctx).Where("ticket_id = ? OR related_id = ?", ticketID, ticketID).
+		Find(&list).Error
+	return list, err
+}
+
+// GetTicketRelation 获取单个关联
+func (r *TicketRepository) GetTicketRelation(ctx context.Context, id uint) (*model.TicketRelation, error) {
+	var rel model.TicketRelation
+	err := r.db.WithContext(ctx).First(&rel, id).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &rel, nil
+}
+
+// GetRolePermissions 获取角色的权限映射
+func (r *TicketRepository) GetRolePermissions(ctx context.Context, roleName string) (map[string]bool, error) {
+	var role model.Role
+	if err := r.db.WithContext(ctx).Where("name = ?", roleName).First(&role).Error; err != nil {
+		// admin 默认拥有所有权限
+		if roleName == "admin" {
+			return nil, nil
+		}
+		return make(map[string]bool), nil
+	}
+	if role.Permissions == "" {
+		return make(map[string]bool), nil
+	}
+
+	var permList []string
+	if err := role.ScanPermissions(&permList); err != nil {
+		return make(map[string]bool), nil
+	}
+
+	perms := make(map[string]bool, len(permList))
+	for _, p := range permList {
+		perms[p] = true
+	}
+	return perms, nil
+}
+
+// ListRoles 获取所有角色
+func (r *TicketRepository) ListRoles(ctx context.Context) ([]model.Role, error) {
+	var list []model.Role
+	if err := r.db.WithContext(ctx).Order("name ASC").Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// GetRole 获取单个角色
+func (r *TicketRepository) GetRole(ctx context.Context, id uint) (*model.Role, error) {
+	var role model.Role
+	if err := r.db.WithContext(ctx).First(&role, id).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &role, nil
+}
+
+// CreateRole 创建角色
+func (r *TicketRepository) CreateRole(ctx context.Context, role *model.Role) error {
+	return r.db.WithContext(ctx).Create(role).Error
+}
+
+// UpdateRole 更新角色
+func (r *TicketRepository) UpdateRole(ctx context.Context, role *model.Role) error {
+	return r.db.WithContext(ctx).Save(role).Error
+}
+
+// DeleteRole 删除角色
+func (r *TicketRepository) DeleteRole(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&model.Role{}, id).Error
+}
+
+// --- Ticket Fields ---
+
+func (r *TicketRepository) ListTicketFields(ctx context.Context) ([]model.TicketField, error) {
+	var list []model.TicketField
+	err := r.db.WithContext(ctx).Order("sort_order ASC, id ASC").Find(&list).Error
+	return list, err
+}
+
+func (r *TicketRepository) GetTicketField(ctx context.Context, id uint) (*model.TicketField, error) {
+	var f model.TicketField
+	err := r.db.WithContext(ctx).First(&f, id).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &f, nil
+}
+
+func (r *TicketRepository) CreateTicketField(ctx context.Context, f *model.TicketField) error {
+	return r.db.WithContext(ctx).Create(f).Error
+}
+
+func (r *TicketRepository) UpdateTicketField(ctx context.Context, f *model.TicketField) error {
+	return r.db.WithContext(ctx).Save(f).Error
+}
+
+func (r *TicketRepository) DeleteTicketField(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("field_id = ?", id).Delete(&model.TicketFieldValue{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&model.TicketField{}, id).Error
+	})
+}
+
+func (r *TicketRepository) SetTicketFieldValues(ctx context.Context, ticketID uint, values []model.TicketFieldValue) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("ticket_id = ?", ticketID).Delete(&model.TicketFieldValue{}).Error; err != nil {
+			return err
+		}
+		for _, v := range values {
+			v.TicketID = ticketID
+			if err := tx.Create(&v).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r *TicketRepository) GetTicketFieldValues(ctx context.Context, ticketID uint) ([]model.TicketFieldValue, error) {
+	var list []model.TicketFieldValue
+	err := r.db.WithContext(ctx).Preload("Field").
+		Where("ticket_id = ?", ticketID).
+		Order("field_id ASC").
+		Find(&list).Error
+	return list, err
+}
+
+// --- SLA Config ---
+
+type SLAConfigRepository struct {
+	*BaseRepository
+}
+
+func NewSLAConfigRepository(db *gorm.DB) *SLAConfigRepository {
+	return &SLAConfigRepository{NewBaseRepository(db)}
+}
+
+func (r *SLAConfigRepository) List(ctx context.Context) ([]model.SLAConfig, error) {
+	var list []model.SLAConfig
+	err := r.db.WithContext(ctx).Order("priority, category_id").Find(&list).Error
+	return list, err
+}
+
+func (r *SLAConfigRepository) GetByID(ctx context.Context, id uint) (*model.SLAConfig, error) {
+	var c model.SLAConfig
+	err := r.db.WithContext(ctx).First(&c, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *SLAConfigRepository) Create(ctx context.Context, c *model.SLAConfig) error {
+	return r.db.WithContext(ctx).Create(c).Error
+}
+
+func (r *SLAConfigRepository) Update(ctx context.Context, c *model.SLAConfig) error {
+	return r.db.WithContext(ctx).Save(c).Error
+}
+
+func (r *SLAConfigRepository) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&model.SLAConfig{}, id).Error
+}
+
+func (r *SLAConfigRepository) FindMatch(ctx context.Context, priority string, categoryID *uint) (*model.SLAConfig, error) {
+	// Exact match: priority + category
+	var c model.SLAConfig
+	err := r.db.WithContext(ctx).
+		Where("priority = ? AND category_id = ? AND enabled = ?", priority, categoryID, true).
+		First(&c).Error
+	if err == nil {
+		return &c, nil
+	}
+	if err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	// Fallback: priority only (global)
+	err = r.db.WithContext(ctx).
+		Where("priority = ? AND category_id IS NULL AND enabled = ?", priority, true).
+		First(&c).Error
+	if err == nil {
+		return &c, nil
+	}
+	return nil, nil
+}
+
+// --- Webhook Config ---
+
+type WebhookConfigRepository struct {
+	*BaseRepository
+}
+
+func NewWebhookConfigRepository(db *gorm.DB) *WebhookConfigRepository {
+	return &WebhookConfigRepository{NewBaseRepository(db)}
+}
+
+func (r *WebhookConfigRepository) List(ctx context.Context) ([]model.WebhookConfig, error) {
+	var list []model.WebhookConfig
+	err := r.db.WithContext(ctx).Order("name").Find(&list).Error
+	return list, err
+}
+
+func (r *WebhookConfigRepository) GetByID(ctx context.Context, id uint) (*model.WebhookConfig, error) {
+	var c model.WebhookConfig
+	err := r.db.WithContext(ctx).First(&c, id).Error
+	return &c, err
+}
+
+func (r *WebhookConfigRepository) Create(ctx context.Context, c *model.WebhookConfig) error {
+	return r.db.WithContext(ctx).Create(c).Error
+}
+
+func (r *WebhookConfigRepository) Update(ctx context.Context, c *model.WebhookConfig) error {
+	return r.db.WithContext(ctx).Save(c).Error
+}
+
+func (r *WebhookConfigRepository) Delete(ctx context.Context, id uint) error {
+	return r.db.WithContext(ctx).Delete(&model.WebhookConfig{}, id).Error
+}
+
+func (r *WebhookConfigRepository) FindByEvent(ctx context.Context, event string) ([]model.WebhookConfig, error) {
+	var list []model.WebhookConfig
+	err := r.db.WithContext(ctx).
+		Where("events LIKE ? AND enabled = ?", "%"+event+"%", true).
+		Find(&list).Error
+	return list, err
+}
+
+// --- Bot Config ---
+
+func (r *TicketRepository) GetBotConfig(ctx context.Context, channel string) (*model.BotConfig, error) {
+	var cfg model.BotConfig
+	err := r.db.WithContext(ctx).Where("channel = ?", channel).First(&cfg).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &cfg, nil
+}
+
+func (r *TicketRepository) SetBotConfig(ctx context.Context, cfg *model.BotConfig) error {
+	var existing model.BotConfig
+	if err := r.db.WithContext(ctx).Where("channel = ?", cfg.Channel).First(&existing).Error; err == nil {
+		cfg.ID = existing.ID
+		cfg.CreatedAt = existing.CreatedAt
+		return r.db.WithContext(ctx).Save(cfg).Error
+	}
+	return r.db.WithContext(ctx).Create(cfg).Error
 }
 
 

@@ -1,6 +1,11 @@
 package gateway
 
-import "time"
+import (
+	"context"
+	"time"
+
+	"github.com/husky/husky/internal/model"
+)
 
 type ChannelType string
 
@@ -58,4 +63,9 @@ type TicketEvent struct {
 
 type UserEnricher interface {
 	Enrich(ctx *UserContext) error
+}
+
+// BotHandler 多渠道知识库问答接口
+type BotHandler interface {
+	Ask(ctx context.Context, question string) (*model.AnswerResponse, error)
 }

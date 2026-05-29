@@ -114,13 +114,16 @@ func (r *WorkflowRepository) ListStepsByAssignee(ctx context.Context, userID uin
 	var total int64
 
 	query := r.db.WithContext(ctx).Model(&model.WorkflowStep{}).
-		Where("assignee_id = ? AND status = 'pending'", userID)
+		Where("assignee_id = ? AND status IN ?", userID, []string{"pending", "running"})
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 	err := query.
 		Preload("Assignee").
 		Preload("Agent").
+		Preload("Workflow", func(db *gorm.DB) *gorm.DB {
+			return db.Preload("Ticket")
+		}).
 		Offset(offset).Limit(limit).
 		Order("created_at ASC").
 		Find(&steps).Error

@@ -2,7 +2,6 @@ package ticket
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"time"
 
@@ -13,12 +12,14 @@ import (
 // SLAEscalator monitors ticket SLA deadlines and escalates breached tickets.
 type SLAEscalator struct {
 	ticketRepo *repository.TicketRepository
+	slaSvc     *SLAConfigService
 	interval   time.Duration
 }
 
-func NewSLAEscalator(ticketRepo *repository.TicketRepository) *SLAEscalator {
+func NewSLAEscalator(ticketRepo *repository.TicketRepository, slaSvc *SLAConfigService) *SLAEscalator {
 	return &SLAEscalator{
 		ticketRepo: ticketRepo,
+		slaSvc:     slaSvc,
 		interval:   5 * time.Minute,
 	}
 }
@@ -71,11 +72,14 @@ func (e *SLAEscalator) escalateTicket(ctx context.Context, ticket *model.Ticket)
 	isBreached := now.After(*ticket.DueAt)
 
 	var newStatus string
+	var eventType string
 	switch {
 	case isBreached:
 		newStatus = "breached"
+		eventType = "sla_breach"
 	case isWarning:
 		newStatus = "warning"
+		eventType = "sla_warning"
 	default:
 		return nil
 	}
@@ -83,44 +87,30 @@ func (e *SLAEscalator) escalateTicket(ctx context.Context, ticket *model.Ticket)
 	if err := e.ticketRepo.UpdateFields(ctx, ticket.ID, map[string]interface{}{
 		"sla_status": newStatus,
 	}); err != nil {
-		return fmt.Errorf("failed to update SLA status: %w", err)
+		return err
 	}
 
 	ticket.SLAStatus = newStatus
 
-	if isBreached || isWarning {
-		e.createSLAAlert(ctx, ticket, newStatus)
+	// Fire SLA event via service (notification + webhook + channel)
+	if e.slaSvc != nil {
+		e.slaSvc.FireSLAEvent(ctx, ticket, eventType)
 	}
 
 	return nil
 }
 
-func (e *SLAEscalator) createSLAAlert(ctx context.Context, ticket *model.Ticket, slaType string) {
-	title := fmt.Sprintf("SLA %s: %s", slaType, ticket.TicketNo)
-	content := fmt.Sprintf("工单 #%s（%s）SLA %s，请及时处理。", ticket.TicketNo, ticket.Title, slaType)
-
-	if slaType == "breached" {
-		content = fmt.Sprintf("工单 #%s（%s）SLA 已超期，请立即处理。", ticket.TicketNo, ticket.Title)
+// ComputeAndSetDueAt 根据 SLA 配置计算并设置工单 DueAt
+func (e *SLAEscalator) ComputeAndSetDueAt(ctx context.Context, ticket *model.Ticket) {
+	if e.slaSvc == nil {
+		return
 	}
-
-	if ticket.AssigneeID != nil {
-		e.createNotification(ctx, *ticket.AssigneeID, title, content, ticket.ID)
-	}
-
-	e.createNotification(ctx, ticket.RequesterID, title,
-		fmt.Sprintf("工单 #%s SLA %s", ticket.TicketNo, slaType), ticket.ID)
-}
-
-func (e *SLAEscalator) createNotification(ctx context.Context, userID uint, title, content string, ticketID uint) {
-	if err := e.ticketRepo.CreateNotification(ctx, &model.Notification{
-		UserID:        userID,
-		Type:          "sla",
-		Title:         title,
-		Content:       content,
-		ReferenceID:   ticketID,
-		ReferenceType: "ticket",
-		Status:        "unread",
-	}); err != nil {
-		log.Printf("SLA escalator: failed to create notification: %v", err)
+	dueAt := e.slaSvc.ComputeDueAt(ctx, ticket)
+	if dueAt != nil {
+		if err := e.ticketRepo.UpdateFields(ctx, ticket.ID, map[string]interface{}{
+			"due_at": dueAt,
+		}); err != nil {
+			log.Printf("SLA: failed to set due_at for ticket %d: %v", ticket.ID, err)
+		}
 	}
 }

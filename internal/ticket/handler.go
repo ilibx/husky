@@ -24,17 +24,19 @@ type AgentEngineHandler interface {
 }
 
 type TicketHandler struct {
-	ticketService  Service
-	ticketGroupSvc TicketGroupHandler
-	agentEngine    AgentEngineHandler
-	log            *logger.Logger
+	ticketService   Service
+	ticketGroupSvc  TicketGroupHandler
+	agentEngine     AgentEngineHandler
+	slaConfigSvc    *SLAConfigService
+	log             *logger.Logger
 }
 
-func NewTicketHandler(ticketService Service, ticketGroupSvc TicketGroupHandler, agentEngine AgentEngineHandler, log *logger.Logger) *TicketHandler {
+func NewTicketHandler(ticketService Service, ticketGroupSvc TicketGroupHandler, agentEngine AgentEngineHandler, slaConfigSvc *SLAConfigService, log *logger.Logger) *TicketHandler {
 	return &TicketHandler{
 		ticketService:  ticketService,
 		ticketGroupSvc: ticketGroupSvc,
 		agentEngine:    agentEngine,
+		slaConfigSvc:   slaConfigSvc,
 		log:            log,
 	}
 }
@@ -45,10 +47,22 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
 		return
 	}
-	if userID, exists := c.Get("user_id"); exists {
-		if uid, ok := userID.(uint); ok {
+
+	userID, _ := c.Get("user_id")
+	role, _ := c.Get("role")
+	uid, _ := userID.(uint)
+
+	// Admin/agent can create ticket on behalf of others
+	if role == "admin" || role == "agent" {
+		if req.RequesterID == "" {
 			req.RequesterID = fmt.Sprintf("%d", uid)
 		}
+	} else {
+		if req.RequesterID != "" && req.RequesterID != fmt.Sprintf("%d", uid) {
+			c.JSON(http.StatusForbidden, errors.NewErrorResponse(errors.ErrForbidden, "cannot create ticket for another user"))
+			return
+		}
+		req.RequesterID = fmt.Sprintf("%d", uid)
 	}
 
 	resp, err := h.ticketService.CreateTicket(c.Request.Context(), &req)
@@ -62,6 +76,13 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 		t, err := h.ticketService.GetTicket(ctx, ticketID)
 		if err != nil {
 			return
+		}
+
+		// Compute SLA due date
+		if h.slaConfigSvc != nil {
+			if dueAt := h.slaConfigSvc.ComputeDueAt(ctx, t); dueAt != nil {
+				h.ticketService.SetDueAt(ctx, ticketID, *dueAt)
+			}
 		}
 
 		if h.ticketGroupSvc != nil {
@@ -511,4 +532,629 @@ func parseUintParam(c *gin.Context, name string) (uint, error) {
 		return 0, err
 	}
 	return uint(v), nil
+}
+
+// --- Tags ---
+
+func (h *TicketHandler) CreateTag(c *gin.Context) {
+	var req struct {
+		Name  string `json:"name" binding:"required"`
+		Color string `json:"color"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	tag, err := h.ticketService.CreateTag(c.Request.Context(), req.Name, req.Color)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, tag)
+}
+
+func (h *TicketHandler) ListTags(c *gin.Context) {
+	tags, err := h.ticketService.ListTags(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": tags})
+}
+
+func (h *TicketHandler) GetTag(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid tag id"))
+		return
+	}
+
+	tag, err := h.ticketService.GetTag(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	if tag == nil {
+		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, "tag not found"))
+		return
+	}
+
+	c.JSON(http.StatusOK, tag)
+}
+
+func (h *TicketHandler) UpdateTag(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid tag id"))
+		return
+	}
+
+	var req struct {
+		Name  string `json:"name"`
+		Color string `json:"color"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	tag := &model.Tag{Name: req.Name, Color: req.Color}
+	tag.ID = id
+
+	if err := h.ticketService.UpdateTag(c.Request.Context(), tag); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, tag)
+}
+
+func (h *TicketHandler) DeleteTag(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid tag id"))
+		return
+	}
+
+	if err := h.ticketService.DeleteTag(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *TicketHandler) GetTicketTags(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	tags, err := h.ticketService.GetTicketTags(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": tags})
+}
+
+func (h *TicketHandler) UpdateTicketTags(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	var req struct {
+		TagIDs []uint `json:"tag_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	if err := h.ticketService.UpdateTicketTags(c.Request.Context(), id, req.TagIDs); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (h *TicketHandler) AddTicketTags(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	var req struct {
+		TagIDs []uint `json:"tag_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	if err := h.ticketService.AddTagsToTicket(c.Request.Context(), id, req.TagIDs); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (h *TicketHandler) RemoveTicketTag(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	tagID, err := parseUintParam(c, "tagId")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid tag id"))
+		return
+	}
+
+	if err := h.ticketService.RemoveTagFromTicket(c.Request.Context(), id, tagID); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// --- Assign Config ---
+
+func (h *TicketHandler) GetAssignConfig(c *gin.Context) {
+	categoryIDStr := c.Query("category_id")
+	var categoryID *uint
+	if categoryIDStr != "" {
+		if id, err := strconv.ParseUint(categoryIDStr, 10, 64); err == nil {
+			cid := uint(id)
+			categoryID = &cid
+		}
+	}
+
+	cfg, err := h.ticketService.GetAssignConfig(c.Request.Context(), categoryID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, cfg)
+}
+
+func (h *TicketHandler) SetAssignConfig(c *gin.Context) {
+	var req model.AssignConfigRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	cfg := &model.AssignConfig{
+		Strategy:   req.Strategy,
+		CategoryID: req.CategoryID,
+	}
+
+	if err := h.ticketService.SetAssignConfig(c.Request.Context(), cfg); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, cfg)
+}
+
+// --- Ticket Relations ---
+
+func (h *TicketHandler) CreateTicketRelation(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	var req struct {
+		RelatedID    uint   `json:"related_id" binding:"required"`
+		RelationType string `json:"relation_type" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	rel, err := h.ticketService.CreateTicketRelation(c.Request.Context(), id, req.RelatedID, req.RelationType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, rel)
+}
+
+func (h *TicketHandler) ListTicketRelations(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	rels, err := h.ticketService.ListTicketRelations(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": rels})
+}
+
+func (h *TicketHandler) DeleteTicketRelation(c *gin.Context) {
+	relID, err := parseUintParam(c, "relationId")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid relation id"))
+		return
+	}
+
+	if err := h.ticketService.DeleteTicketRelation(c.Request.Context(), relID); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// --- Roles ---
+
+func (h *TicketHandler) ListRoles(c *gin.Context) {
+	roles, err := h.ticketService.ListRoles(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": roles})
+}
+
+func (h *TicketHandler) GetRole(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid role id"))
+		return
+	}
+
+	role, err := h.ticketService.GetRole(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	if role == nil {
+		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, "role not found"))
+		return
+	}
+
+	c.JSON(http.StatusOK, role)
+}
+
+func (h *TicketHandler) CreateRole(c *gin.Context) {
+	var req model.Role
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	if err := h.ticketService.CreateRole(c.Request.Context(), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, req)
+}
+
+func (h *TicketHandler) UpdateRole(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid role id"))
+		return
+	}
+
+	var req model.Role
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	req.ID = id
+	if err := h.ticketService.UpdateRole(c.Request.Context(), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, req)
+}
+
+func (h *TicketHandler) DeleteRole(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid role id"))
+		return
+	}
+
+	if err := h.ticketService.DeleteRole(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+// --- Ticket Fields ---
+
+func (h *TicketHandler) ListTicketFields(c *gin.Context) {
+	fields, err := h.ticketService.ListTicketFields(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": fields})
+}
+
+func (h *TicketHandler) CreateTicketField(c *gin.Context) {
+	var req model.CreateTicketFieldRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	field, err := h.ticketService.CreateTicketField(c.Request.Context(), &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, field)
+}
+
+func (h *TicketHandler) UpdateTicketField(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid field id"))
+		return
+	}
+
+	var req model.UpdateTicketFieldRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	field, err := h.ticketService.UpdateTicketField(c.Request.Context(), id, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, field)
+}
+
+func (h *TicketHandler) DeleteTicketField(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid field id"))
+		return
+	}
+
+	if err := h.ticketService.DeleteTicketField(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.Status(http.StatusNoContent)
+}
+
+func (h *TicketHandler) UpdateTicketFieldValues(c *gin.Context) {
+	ticketID, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	var req []model.TicketFieldValue
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	if err := h.ticketService.UpdateTicketFieldValues(c.Request.Context(), ticketID, req); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"success": true})
+}
+
+func (h *TicketHandler) GetTicketFieldValues(c *gin.Context) {
+	ticketID, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	values, err := h.ticketService.GetTicketFieldValues(c.Request.Context(), ticketID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": values})
+}
+
+// --- Bot Config ---
+
+func (h *TicketHandler) GetBotConfig(c *gin.Context) {
+	channel := c.Param("channel")
+	cfg, err := h.ticketService.GetBotConfig(c.Request.Context(), channel)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, cfg)
+}
+
+func (h *TicketHandler) SetBotConfig(c *gin.Context) {
+	var cfg model.BotConfig
+	if err := c.ShouldBindJSON(&cfg); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+	if err := h.ticketService.SetBotConfig(c.Request.Context(), &cfg); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, cfg)
+}
+
+// --- SLA Config ---
+
+func (h *TicketHandler) ListSLAConfigs(c *gin.Context) {
+	list, err := h.slaConfigSvc.List(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+func (h *TicketHandler) GetSLAConfig(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid id"))
+		return
+	}
+	cfg, err := h.slaConfigSvc.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, "SLA config not found"))
+		return
+	}
+	c.JSON(http.StatusOK, cfg)
+}
+
+func (h *TicketHandler) CreateSLAConfig(c *gin.Context) {
+	var req model.SLAConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+	if err := h.slaConfigSvc.Create(c.Request.Context(), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusCreated, req)
+}
+
+func (h *TicketHandler) UpdateSLAConfig(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid id"))
+		return
+	}
+	var req model.SLAConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+	req.ID = id
+	if err := h.slaConfigSvc.Update(c.Request.Context(), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, req)
+}
+
+func (h *TicketHandler) DeleteSLAConfig(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid id"))
+		return
+	}
+	if err := h.slaConfigSvc.Delete(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+// --- Webhook Config ---
+
+func (h *TicketHandler) ListWebhookConfigs(c *gin.Context) {
+	list, err := h.slaConfigSvc.webhookRepo.List(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": list})
+}
+
+func (h *TicketHandler) GetWebhookConfig(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid id"))
+		return
+	}
+	cfg, err := h.slaConfigSvc.webhookRepo.GetByID(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, "webhook config not found"))
+		return
+	}
+	c.JSON(http.StatusOK, cfg)
+}
+
+func (h *TicketHandler) CreateWebhookConfig(c *gin.Context) {
+	var req model.WebhookConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+	if err := h.slaConfigSvc.webhookRepo.Create(c.Request.Context(), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusCreated, req)
+}
+
+func (h *TicketHandler) UpdateWebhookConfig(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid id"))
+		return
+	}
+	var req model.WebhookConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+	req.ID = id
+	if err := h.slaConfigSvc.webhookRepo.Update(c.Request.Context(), &req); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, req)
+}
+
+func (h *TicketHandler) DeleteWebhookConfig(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid id"))
+		return
+	}
+	if err := h.slaConfigSvc.webhookRepo.Delete(c.Request.Context(), id); err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.Status(http.StatusNoContent)
 }

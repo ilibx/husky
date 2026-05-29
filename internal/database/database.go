@@ -80,6 +80,12 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.ChannelConfig{},
 		&model.TicketWatcher{},
 		&model.TicketGroup{},
+		&model.Tag{},
+		&model.AssignConfig{},
+		&model.TicketRelation{},
+		&model.TicketField{},
+		&model.TicketFieldValue{},
+		&model.BotConfig{},
 	)
 
 	if err != nil {
