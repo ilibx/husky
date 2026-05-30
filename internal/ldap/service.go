@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log"
 
 	"github.com/husky/husky/internal/config"
 	"github.com/husky/husky/internal/model"
@@ -23,16 +24,17 @@ type SyncResult struct {
 }
 
 type Service struct {
+	cfg      *config.Config
 	userRepo *repository.UserRepository
 	log      *logger.Logger
 }
 
-func NewService(userRepo *repository.UserRepository, log *logger.Logger) *Service {
-	return &Service{userRepo: userRepo, log: log}
+func NewService(cfg *config.Config, userRepo *repository.UserRepository, log *logger.Logger) *Service {
+	return &Service{cfg: cfg, userRepo: userRepo, log: log}
 }
 
 func (s *Service) SyncUsers(ctx context.Context) (*SyncResult, error) {
-	cfg := config.Conf
+	cfg := s.cfg
 	if cfg.LDAPHost == "" {
 		return nil, fmt.Errorf("LDAP not configured: LDAP_HOST is empty")
 	}
@@ -46,7 +48,11 @@ func (s *Service) SyncUsers(ctx context.Context) (*SyncResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to LDAP server: %w", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("failed to close LDAP connection: %v", err)
+		}
+	}()
 
 	if err := conn.StartTLS(&tls.Config{InsecureSkipVerify: true}); err != nil {
 		s.log.Warn("LDAP STARTTLS failed, trying plain connection", "error", err)

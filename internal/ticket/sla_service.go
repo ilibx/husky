@@ -125,9 +125,14 @@ func (s *SLAConfigService) FireSLAEvent(ctx context.Context, ticket *model.Ticke
 func (s *SLAConfigService) fireWebhooks(ctx context.Context, event SLAEvent) {
 	webhooks, err := s.webhookRepo.FindByEvent(ctx, event.Type)
 	if err != nil {
+		log.Printf("SLA webhook: failed to find webhooks for event %q: %v", event.Type, err)
 		return
 	}
-	body, _ := json.Marshal(event)
+	body, err := json.Marshal(event)
+	if err != nil {
+		log.Printf("SLA webhook: failed to marshal event: %v", err)
+		return
+	}
 	for _, wh := range webhooks {
 		go s.sendWebhook(wh, body)
 	}
@@ -154,7 +159,9 @@ func (s *SLAConfigService) sendWebhook(wh model.WebhookConfig, body []byte) {
 		log.Printf("SLA webhook: failed to send to %s: %v", wh.URL, err)
 		return
 	}
-	resp.Body.Close()
+	if err := resp.Body.Close(); err != nil {
+		log.Printf("SLA webhook: failed to close response body: %v", err)
+	}
 }
 
 func (s *SLAConfigService) createNotification(ctx context.Context, userID uint, title, content string, ticketID uint) {

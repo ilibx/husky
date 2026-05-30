@@ -14,6 +14,7 @@ import (
 	"github.com/husky/husky/internal/handler"
 	"github.com/husky/husky/internal/intent"
 	"github.com/husky/husky/internal/knowledge"
+	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/internal/ldap"
 	"github.com/husky/husky/internal/middleware"
 	"github.com/husky/husky/internal/middleware/auth"
@@ -24,13 +25,16 @@ import (
 	"github.com/husky/husky/pkg/logger"
 )
 
-func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log *logger.Logger) http.Handler {
+func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log *logger.Logger) (http.Handler, func()) {
 	if cfg.ServerMode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
 	r := gin.Default()
 	r.Use(middleware.CORS())
+	r.Use(middleware.RateLimit(100, 200))
+
+	auth.SetJWTConfig(cfg.JWTSecret, cfg.JWTExpireHour)
 
 	ticketRepo := repository.NewTicketRepository(dbConn.DB)
 	userRepo := repository.NewUserRepository(dbConn.DB)
@@ -44,7 +48,7 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 			log.Warn("Failed to initialize LLM provider", "error", err)
 		} else {
 			embedService = llm.NewEmbeddingService(provider)
-			chatSvc = llm.NewChatService(provider)
+			chatSvc = llm.NewChatService(provider, llm.WithRateLimit(10, 20))
 			log.Info("LLM embedding service initialized", "provider", provider.Name())
 		}
 	} else {
@@ -63,15 +67,6 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	deptService := service.NewDepartmentService(
 		repository.NewDepartmentRepository(dbConn.DB),
 	)
-
-	// --- Agent layer (SOP + Workflow + Agent engine + RAG) ---
-	sopRepo := repository.NewSOPRepository(dbConn.DB)
-	agentRepo := repository.NewAgentRepository(dbConn.DB)
-	wfRepo := repository.NewWorkflowRepository(dbConn.DB)
-	workflowSvc := agent.NewWorkflowService(wfRepo, ticketRepo, agentRepo, kbRepo, chatSvc)
-	agentEngine := agent.NewEngine(agentRepo, ticketRepo, kbRepo, chatSvc, sopRepo, workflowSvc)
-	agentSvc := agent.NewService(agentRepo)
-	sopSvc := agent.NewSOPService(sopRepo)
 
 	// --- SLA config + escalation ---
 	slaConfigRepo := repository.NewSLAConfigRepository(dbConn.DB)
@@ -94,20 +89,58 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 		log.Warn("Feishu AppID/Secret not set, ticket group auto-creation disabled")
 	}
 
-	// Register channel user enrichers for gateway
+	// --- Agent layer (SOP + Workflow + Agent engine + RAG) ---
+	sopRepo := repository.NewSOPRepository(dbConn.DB)
+	agentRepo := repository.NewAgentRepository(dbConn.DB)
+	wfRepo := repository.NewWorkflowRepository(dbConn.DB)
+	workflowSvc := agent.NewWorkflowService(wfRepo, ticketRepo, agentRepo, kbRepo, chatSvc)
+	workflowSvc.SetAgentUserID(1)
+	sopMatcher := agent.NewSOPMatcher(sopRepo, workflowSvc, chatSvc)
+	agentEngine := agent.NewEngine(agentRepo, ticketRepo, kbRepo, chatSvc, ticketSvc)
+	agentSvc := agent.NewService(agentRepo)
+	sopSvc := agent.NewSOPService(sopRepo)
+
+	// --- Register post-creation handler on ticket service ---
+	// Consolidates SLA, group creation, agent execution, and SOP matching
+	// into a single path. Each concern is a separate handler.
+	ticketSvc.OnTicketCreated(func(ctx context.Context, t *model.Ticket) {
+		if slaConfigSvc != nil {
+			if dueAt := slaConfigSvc.ComputeDueAt(ctx, t); dueAt != nil {
+				ticketSvc.SetDueAt(ctx, t.ID, *dueAt)
+			}
+		}
+		if ticketGroupSvc != nil {
+			if _, err := ticketGroupSvc.CreateGroupForTicket(ctx, t); err != nil {
+				log.Error("Failed to create group", "error", err, "ticket_id", t.ID)
+			}
+		}
+	})
+	ticketSvc.OnTicketCreated(func(ctx context.Context, t *model.Ticket) {
+		if agentEngine != nil {
+			agentEngine.OnTicketCreated(ctx, t)
+		}
+	})
+	ticketSvc.OnTicketCreated(func(ctx context.Context, t *model.Ticket) {
+		if sopMatcher != nil {
+			sopMatcher.MatchAndCreateWorkflow(ctx, t)
+		}
+	})
+
+	// Build channel user enrichers for gateway
+	enrichers := make(map[gateway.ChannelType]gateway.UserEnricher)
 	if feishuCli != nil {
-		gateway.RegisterEnricher(gateway.ChannelLark, gateway.NewFeishuEnricher(feishuCli))
+		enrichers[gateway.ChannelLark] = gateway.NewFeishuEnricher(feishuCli)
 	}
 
 	// --- Gateway: channel ↔ gateway ↔ ticket | gateway ↔ agent ---
-	gw := gateway.NewGateway(ticketSvc, agentEngine, feishuCli, ticketGroupSvc, knowledgeSvc, ticketSvc, intent.NewService(chatSvc), log)
+	gw := gateway.NewGateway(ticketSvc, feishuCli, ticketGroupSvc, knowledgeSvc, ticketSvc, intent.NewService(chatSvc), enrichers, log)
 
 	// --- Handlers ---
 	authHandler := handler.NewAuthHandler(authService, log)
-	ticketHandler := ticket.NewTicketHandler(ticketSvc, ticketGroupSvc, agentEngine, slaConfigSvc, log)
+	ticketHandler := ticket.NewTicketHandler(ticketSvc, slaConfigSvc, log)
 	knowledgeHandler := knowledge.NewHandler(knowledgeSvc)
 	statsHandler := handler.NewStatsHandler(statsService, log)
-	userHandler := handler.NewUserHandler(userService, ldap.NewService(userRepo, log), log)
+	userHandler := handler.NewUserHandler(userService, ldap.NewService(cfg, userRepo, log), log)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	deptHandler := handler.NewDepartmentHandler(deptService)
 	channelHandler := channel.NewHandler(gw, channelCfgSvc, ticketSvc, log)
@@ -121,248 +154,103 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	auth.SetPermissionsLoader(ticketRepo)
 
 	adminHandler := admin.NewHandler(admin.Option{
-		Mode: config.Conf.AdminMode,
-		URL:  config.Conf.AdminURL,
+		Mode: cfg.AdminMode,
+		URL:  cfg.AdminURL,
 	})
 	r.Any("/admin/*path", gin.WrapH(adminHandler))
 	r.Any("/admin", gin.WrapH(adminHandler))
 
 	v1 := r.Group("/api/v1")
 	v1.Use(auth.LoadPermissionsMiddleware())
-	{
-		authGroup := v1.Group("/auth")
-		{
-			authGroup.POST("/login", authHandler.Login)
-			authGroup.POST("/register", authHandler.Register)
-			authGroup.POST("/refresh", authHandler.Refresh)
-		}
 
-		users := v1.Group("/users")
-		users.Use(auth.AuthMiddleware())
-		{
-			users.GET("/me", authHandler.Me)
-			users.GET("", auth.RBACMiddleware("admin"), userHandler.ListUsers)
-			users.GET("/:id", userHandler.GetUser)
-			users.PUT("/:id", userHandler.UpdateUser)
-			users.DELETE("/:id", auth.RBACMiddleware("admin"), userHandler.DeleteUser)
-			users.PUT("/:id/role", auth.RBACMiddleware("admin"), userHandler.ChangeRole)
-			users.POST("/sync-ldap", auth.RBACMiddleware("admin"), userHandler.SyncLDAPUsers)
-		}
+	setupAuthRoutes(v1.Group("/auth"), authHandler)
 
-		tickets := v1.Group("/tickets")
-		tickets.Use(auth.AuthMiddleware())
-		{
-			tickets.POST("", ticketHandler.CreateTicket)
-			tickets.GET("", ticketHandler.ListTickets)
-			tickets.GET("/overdue", ticketHandler.ListOverdue)
-			tickets.GET("/:id", ticketHandler.GetTicket)
-			tickets.PUT("/:id", ticketHandler.UpdateTicket)
-			tickets.DELETE("/:id", ticketHandler.DeleteTicket)
-			tickets.POST("/:id/assign", ticketHandler.AssignTicket)
-			tickets.POST("/:id/auto-assign", ticketHandler.AutoAssignTicket)
-			tickets.POST("/:id/claim", ticketHandler.ClaimTicket)
-			tickets.POST("/:id/watch", ticketHandler.WatchTicket)
-			tickets.DELETE("/:id/watch", ticketHandler.UnwatchTicket)
-			tickets.POST("/:id/status", ticketHandler.UpdateStatus)
-			tickets.POST("/:id/due", ticketHandler.SetDueAt)
-			tickets.POST("/:id/rate", ticketHandler.RateTicket)
-			tickets.GET("/:id/rate", ticketHandler.GetSatisfaction)
-			tickets.POST("/:id/comments", ticketHandler.AddComment)
-			tickets.GET("/:id/comments", ticketHandler.GetComments)
-			tickets.GET("/:id/audit-logs", ticketHandler.ListAuditLogs)
-			tickets.POST("/:id/attachments", ticketHandler.UploadAttachment)
-			tickets.GET("/:id/attachments", ticketHandler.ListAttachments)
-			tickets.DELETE("/:id/attachments/:attachmentId", ticketHandler.DeleteAttachment)
-			// Ticket tags
-			tickets.GET("/:id/tags", ticketHandler.GetTicketTags)
-			tickets.PUT("/:id/tags", ticketHandler.UpdateTicketTags)
-			tickets.POST("/:id/tags", ticketHandler.AddTicketTags)
-			tickets.DELETE("/:id/tags/:tagId", ticketHandler.RemoveTicketTag)
-			// Ticket custom fields
-			tickets.GET("/fields/definitions", ticketHandler.ListTicketFields)
-			tickets.POST("/fields/definitions", ticketHandler.CreateTicketField)
-			tickets.PUT("/fields/definitions/:id", ticketHandler.UpdateTicketField)
-			tickets.DELETE("/fields/definitions/:id", ticketHandler.DeleteTicketField)
-			tickets.GET("/:id/fields", ticketHandler.GetTicketFieldValues)
-			tickets.PUT("/:id/fields", ticketHandler.UpdateTicketFieldValues)
-		}
-		// Global tags
-		tags := v1.Group("/tags")
-		tags.Use(auth.AuthMiddleware())
-		{
-			tags.POST("", ticketHandler.CreateTag)
-			tags.GET("", ticketHandler.ListTags)
-			tags.GET("/:id", ticketHandler.GetTag)
-			tags.PUT("/:id", ticketHandler.UpdateTag)
-			tags.DELETE("/:id", ticketHandler.DeleteTag)
-		}
-		// Ticket relations
-		tickets.POST("/:id/relations", ticketHandler.CreateTicketRelation)
-		tickets.GET("/:id/relations", ticketHandler.ListTicketRelations)
-		tickets.DELETE("/:id/relations/:relationId", ticketHandler.DeleteTicketRelation)
-		// Assign config
-		assign := v1.Group("/assign-config")
-		assign.Use(auth.AuthMiddleware())
-		{
-			assign.GET("", ticketHandler.GetAssignConfig)
-			assign.POST("", ticketHandler.SetAssignConfig)
-		}
-		// Bot config
-		bot := v1.Group("/bot-config")
-		bot.Use(auth.AuthMiddleware())
-		{
-			bot.GET("/:channel", ticketHandler.GetBotConfig)
-			bot.POST("", ticketHandler.SetBotConfig)
-		}
+	users := v1.Group("/users")
+	users.Use(auth.AuthMiddleware())
+	setupUserRoutes(users, userHandler, authHandler)
 
-		sla := v1.Group("/sla-configs")
-		sla.Use(auth.AuthMiddleware())
-		{
-			sla.GET("", auth.RBACMiddleware("admin"), ticketHandler.ListSLAConfigs)
-			sla.GET("/:id", auth.RBACMiddleware("admin"), ticketHandler.GetSLAConfig)
-			sla.POST("", auth.RBACMiddleware("admin"), ticketHandler.CreateSLAConfig)
-			sla.PUT("/:id", auth.RBACMiddleware("admin"), ticketHandler.UpdateSLAConfig)
-			sla.DELETE("/:id", auth.RBACMiddleware("admin"), ticketHandler.DeleteSLAConfig)
-		}
+	tickets := v1.Group("/tickets")
+	tickets.Use(auth.AuthMiddleware())
+	setupTicketRoutes(tickets, ticketHandler)
 
-		webhooksCfg := v1.Group("/webhook-configs")
-		webhooksCfg.Use(auth.AuthMiddleware())
-		{
-			webhooksCfg.GET("", auth.RBACMiddleware("admin"), ticketHandler.ListWebhookConfigs)
-			webhooksCfg.GET("/:id", auth.RBACMiddleware("admin"), ticketHandler.GetWebhookConfig)
-			webhooksCfg.POST("", auth.RBACMiddleware("admin"), ticketHandler.CreateWebhookConfig)
-			webhooksCfg.PUT("/:id", auth.RBACMiddleware("admin"), ticketHandler.UpdateWebhookConfig)
-			webhooksCfg.DELETE("/:id", auth.RBACMiddleware("admin"), ticketHandler.DeleteWebhookConfig)
-		}
+	tagRoutes := v1.Group("/tags")
+	tagRoutes.Use(auth.AuthMiddleware())
+	setupTagRoutes(tagRoutes, ticketHandler)
 
-		if ticketGroupSvc != nil {
-			feishuGroup := v1.Group("/feishu")
-			feishuGroup.Use(auth.AuthMiddleware())
-			{
-				feishuGroup.POST("/join-group", channelHandler.JoinGroup)
-		}
-		// Roles
-		roles := v1.Group("/roles")
-		roles.Use(auth.AuthMiddleware())
-		{
-			roles.GET("", auth.RBACMiddleware("admin"), ticketHandler.ListRoles)
-			roles.GET("/:id", auth.RBACMiddleware("admin"), ticketHandler.GetRole)
-			roles.POST("", auth.RBACMiddleware("admin"), ticketHandler.CreateRole)
-			roles.PUT("/:id", auth.RBACMiddleware("admin"), ticketHandler.UpdateRole)
-			roles.DELETE("/:id", auth.RBACMiddleware("admin"), ticketHandler.DeleteRole)
-		}
+	tickets.POST("/:id/relations", ticketHandler.CreateTicketRelation)
+	tickets.GET("/:id/relations", ticketHandler.ListTicketRelations)
+	tickets.DELETE("/:id/relations/:relationId", ticketHandler.DeleteTicketRelation)
+
+	assignRoutes := v1.Group("/assign-config")
+	assignRoutes.Use(auth.AuthMiddleware())
+	setupAssignConfigRoutes(assignRoutes, ticketHandler)
+
+	botRoutes := v1.Group("/bot-config")
+	botRoutes.Use(auth.AuthMiddleware())
+	setupBotConfigRoutes(botRoutes, ticketHandler)
+
+	sla := v1.Group("/sla-configs")
+	sla.Use(auth.AuthMiddleware())
+	setupSLAConfigRoutes(sla, ticketHandler)
+
+	webhookCfgRoutes := v1.Group("/webhook-configs")
+	webhookCfgRoutes.Use(auth.AuthMiddleware())
+	setupWebhookConfigRoutes(webhookCfgRoutes, ticketHandler)
+
+	if ticketGroupSvc != nil {
+		feishuGroup := v1.Group("/feishu")
+		feishuGroup.Use(auth.AuthMiddleware())
+		setupFeishuGroupRoutes(feishuGroup, channelHandler)
 	}
 
-		know := v1.Group("/knowledge")
-		know.Use(auth.AuthMiddleware())
-		{
-			know.GET("", knowledgeHandler.ListKnowledge)
-			know.POST("", knowledgeHandler.CreateKnowledge)
-			know.POST("/import", knowledgeHandler.ImportKnowledge)
-			know.GET("/export", knowledgeHandler.ExportKnowledge)
-			know.POST("/search", knowledgeHandler.SearchKnowledge)
-			know.GET("/query", knowledgeHandler.QueryKnowledge)
-			know.GET("/:id", knowledgeHandler.GetKnowledge)
-			know.PUT("/:id", knowledgeHandler.UpdateKnowledge)
-			know.DELETE("/:id", knowledgeHandler.DeleteKnowledge)
-			know.GET("/categories", knowledgeHandler.ListKnowledgeCategories)
-			know.GET("/categories/tree", knowledgeHandler.KnowledgeCategoryTree)
-			know.POST("/ask", knowledgeHandler.Ask)
-			know.GET("/recommend", knowledgeHandler.RecommendKnowledge)
-			know.POST("/:id/view", knowledgeHandler.RecordKnowledgeView)
-		}
+	roles := v1.Group("/roles")
+	roles.Use(auth.AuthMiddleware())
+	setupRoleRoutes(roles, ticketHandler)
 
-		sop := v1.Group("/sop")
-		sop.Use(auth.AuthMiddleware())
-		{
-			sop.GET("", agentHandler.ListSOPs)
-			sop.GET("/:id", agentHandler.GetSOP)
-			sop.POST("", agentHandler.CreateSOP)
-			sop.PUT("/:id", agentHandler.UpdateSOP)
-			sop.DELETE("/:id", agentHandler.DeleteSOP)
-		}
+	know := v1.Group("/knowledge")
+	know.Use(auth.AuthMiddleware())
+	setupKnowledgeRoutes(know, knowledgeHandler)
 
-		workflows := v1.Group("/workflows")
-		workflows.Use(auth.AuthMiddleware())
-		{
-			workflows.GET("", agentHandler.ListWorkflows)
-			workflows.GET("/:id", agentHandler.GetWorkflow)
-			workflows.POST("/steps/:stepId/complete", agentHandler.CompleteStep)
-			workflows.POST("/steps/:stepId/approve", agentHandler.ApproveStep)
-			workflows.POST("/steps/:stepId/reject", agentHandler.RejectStep)
-			workflows.POST("/steps/:stepId/revise", agentHandler.ReviseStep)
-			workflows.GET("/tasks", agentHandler.PendingSteps)
-		}
+	sop := v1.Group("/sop")
+	sop.Use(auth.AuthMiddleware())
+	setupSOPRoutes(sop, agentHandler)
 
-		departments := v1.Group("/departments")
-		departments.Use(auth.AuthMiddleware())
-		{
-			departments.GET("", deptHandler.ListDepartments)
-			departments.GET("/:id", deptHandler.GetDepartment)
-			departments.POST("", auth.RBACMiddleware("admin"), deptHandler.CreateDepartment)
-			departments.PUT("/:id", auth.RBACMiddleware("admin"), deptHandler.UpdateDepartment)
-			departments.DELETE("/:id", auth.RBACMiddleware("admin"), deptHandler.DeleteDepartment)
-		}
+	workflows := v1.Group("/workflows")
+	workflows.Use(auth.AuthMiddleware())
+	setupWorkflowRoutes(workflows, agentHandler)
 
-		agents := v1.Group("/agents")
-		agents.Use(auth.AuthMiddleware())
-		{
-			agents.GET("", agentHandler.ListAgents)
-			agents.GET("/:id", agentHandler.GetAgent)
-			agents.POST("", auth.RBACMiddleware("admin"), agentHandler.CreateAgent)
-			agents.PUT("/:id", auth.RBACMiddleware("admin"), agentHandler.UpdateAgent)
-			agents.DELETE("/:id", auth.RBACMiddleware("admin"), agentHandler.DeleteAgent)
-		}
+	departments := v1.Group("/departments")
+	departments.Use(auth.AuthMiddleware())
+	setupDepartmentRoutes(departments, deptHandler)
 
-		channels := v1.Group("/channels")
-		channels.Use(auth.AuthMiddleware())
-		{
-			channels.GET("", channelHandler.ListChannelConfigs)
-			channels.GET("/:id", channelHandler.GetChannelConfig)
-			channels.POST("", auth.RBACMiddleware("admin"), channelHandler.CreateChannelConfig)
-			channels.PUT("/:id", auth.RBACMiddleware("admin"), channelHandler.UpdateChannelConfig)
-			channels.DELETE("/:id", auth.RBACMiddleware("admin"), channelHandler.DeleteChannelConfig)
-		}
+	agents := v1.Group("/agents")
+	agents.Use(auth.AuthMiddleware())
+	setupAgentRoutes(agents, agentHandler)
 
-		categories := v1.Group("/categories")
-		categories.Use(auth.AuthMiddleware())
-		{
-			categories.GET("", categoryHandler.ListCategories)
-			categories.GET("/:id", categoryHandler.GetCategory)
-			categories.POST("", auth.RBACMiddleware("admin"), categoryHandler.CreateCategory)
-			categories.PUT("/:id", auth.RBACMiddleware("admin"), categoryHandler.UpdateCategory)
-			categories.DELETE("/:id", auth.RBACMiddleware("admin"), categoryHandler.DeleteCategory)
-		}
+	channels := v1.Group("/channels")
+	channels.Use(auth.AuthMiddleware())
+	setupChannelConfigRoutes(channels, channelHandler)
 
-		notifications := v1.Group("/notifications")
-		notifications.Use(auth.AuthMiddleware())
-		{
-			notifications.GET("", channelHandler.ListNotifications)
-			notifications.GET("/unread-count", channelHandler.GetUnreadCount)
-			notifications.PUT("/:id/read", channelHandler.MarkRead)
-		}
+	categories := v1.Group("/categories")
+	categories.Use(auth.AuthMiddleware())
+	setupCategoryRoutes(categories, categoryHandler)
 
-		messages := v1.Group("/messages")
-		messages.Use(auth.AuthMiddleware())
-		{
-			messages.GET("", auth.RBACMiddleware("admin"), channelHandler.ListWebhookMessages)
-		}
+	notifications := v1.Group("/notifications")
+	notifications.Use(auth.AuthMiddleware())
+	setupNotificationRoutes(notifications, channelHandler)
 
-		stats := v1.Group("/stats")
-		stats.Use(auth.AuthMiddleware())
-		{
-			stats.GET("/overview", statsHandler.Overview)
-			stats.GET("/tickets", statsHandler.Tickets)
-			stats.GET("/performance", statsHandler.Performance)
-		}
-	}
+	messages := v1.Group("/messages")
+	messages.Use(auth.AuthMiddleware())
+	setupMessageRoutes(messages, channelHandler)
+
+	stats := v1.Group("/stats")
+	stats.Use(auth.AuthMiddleware())
+	setupStatsRoutes(stats, statsHandler)
 
 	webhooks := r.Group("/webhooks")
-	{
-		webhooks.POST("/lark", channelHandler.LarkWebhook)
-		webhooks.POST("/dingtalk", channelHandler.DingTalkWebhook)
-		webhooks.POST("/wecom", channelHandler.WeComWebhook)
-	}
+	setupWebhookRoutes(webhooks, channelHandler)
 
-	return r
+	return r, func() {
+		slaEscalator.Stop()
+	}
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/husky/husky/internal/config"
+	"github.com/husky/husky/internal/middleware/auth"
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/internal/repository"
 	"gorm.io/driver/sqlite"
@@ -12,10 +12,7 @@ import (
 )
 
 func init() {
-	config.Conf = &config.Config{
-		JWTSecret:     "test-secret",
-		JWTExpireHour: 24,
-	}
+	auth.SetJWTConfig("test-secret", 24)
 }
 
 func setupAuthTest(t *testing.T) (*repository.UserRepository, AuthService) {

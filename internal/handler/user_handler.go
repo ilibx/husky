@@ -9,6 +9,7 @@ import (
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/internal/service"
 	"github.com/husky/husky/pkg/errors"
+	"github.com/husky/husky/pkg/httputil"
 	"github.com/husky/husky/pkg/logger"
 )
 
@@ -26,10 +27,10 @@ func NewUserHandler(userService service.UserService, ldapSvc *ldap.Service, log 
 
 // ListUsers 获取用户列表（仅管理员）
 func (h *UserHandler) ListUsers(c *gin.Context) {
-	offsetStr := c.DefaultQuery("offset", "0")
-	limitStr := c.DefaultQuery("limit", "20")
-	offset, _ := strconv.Atoi(offsetStr)
-	limit, _ := strconv.Atoi(limitStr)
+	offset, limit, ok := httputil.ParsePagination(c)
+	if !ok {
+		return
+	}
 
 	users, total, err := h.userService.List(c.Request.Context(), offset, limit)
 	if err != nil {

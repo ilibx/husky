@@ -14,6 +14,8 @@ type SLAEscalator struct {
 	ticketRepo *repository.TicketRepository
 	slaSvc     *SLAConfigService
 	interval   time.Duration
+	ctx        context.Context
+	cancel     context.CancelFunc
 }
 
 func NewSLAEscalator(ticketRepo *repository.TicketRepository, slaSvc *SLAConfigService) *SLAEscalator {
@@ -30,6 +32,7 @@ func (e *SLAEscalator) SetInterval(d time.Duration) {
 
 // Start begins the SLA monitoring loop in a background goroutine.
 func (e *SLAEscalator) Start(ctx context.Context) {
+	e.ctx, e.cancel = context.WithCancel(ctx)
 	go func() {
 		ticker := time.NewTicker(e.interval)
 		defer ticker.Stop()
@@ -38,14 +41,21 @@ func (e *SLAEscalator) Start(ctx context.Context) {
 
 		for {
 			select {
-			case <-ctx.Done():
+			case <-e.ctx.Done():
 				log.Println("SLA escalator stopped")
 				return
 			case <-ticker.C:
-				e.checkAndEscalate(context.Background())
+				e.checkAndEscalate(e.ctx)
 			}
 		}
 	}()
+}
+
+// Stop gracefully stops the SLA escalator.
+func (e *SLAEscalator) Stop() {
+	if e.cancel != nil {
+		e.cancel()
+	}
 }
 
 func (e *SLAEscalator) checkAndEscalate(ctx context.Context) {

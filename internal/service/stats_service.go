@@ -11,6 +11,7 @@ type StatsService interface {
 	GetOverview(ctx context.Context) (map[string]interface{}, error)
 	GetTicketStats(ctx context.Context) (map[string]interface{}, error)
 	GetSatisfactionStats(ctx context.Context) (map[string]interface{}, error)
+	GetAgentPerformance(ctx context.Context) ([]repository.AgentPerformance, error)
 }
 
 type statsService struct {
@@ -32,4 +33,8 @@ func (s *statsService) GetTicketStats(ctx context.Context) (map[string]interface
 
 func (s *statsService) GetSatisfactionStats(ctx context.Context) (map[string]interface{}, error) {
 	return s.ticketRepo.GetSatisfactionStats(ctx)
+}
+
+func (s *statsService) GetAgentPerformance(ctx context.Context) ([]repository.AgentPerformance, error) {
+	return s.ticketRepo.GetAgentPerformance(ctx)
 }

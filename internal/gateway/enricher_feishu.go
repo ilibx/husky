@@ -12,19 +12,24 @@ type feishuUserAPI interface {
 }
 
 type FeishuEnricher struct {
-	cli      feishuUserAPI
-	mu       sync.RWMutex
-	cache    map[string]*UserContext
-	cacheTTL time.Duration
-	cacheAt  map[string]time.Time
+	cli         feishuUserAPI
+	mu          sync.RWMutex
+	cache       map[string]*UserContext
+	cacheTTL    time.Duration
+	cacheAt     map[string]time.Time
+	maxEntries  int
+	cleanupEach int
+	opsSinceCleanup int
 }
 
 func NewFeishuEnricher(cli feishuUserAPI) *FeishuEnricher {
 	return &FeishuEnricher{
-		cli:      cli,
-		cache:    make(map[string]*UserContext),
-		cacheTTL: 5 * time.Minute,
-		cacheAt:  make(map[string]time.Time),
+		cli:         cli,
+		cache:       make(map[string]*UserContext),
+		cacheTTL:    5 * time.Minute,
+		cacheAt:     make(map[string]time.Time),
+		maxEntries:  10000,
+		cleanupEach: 100,
 	}
 }
 
@@ -88,6 +93,34 @@ func (e *FeishuEnricher) storeInCache(userID string, ctx *UserContext) {
 
 	e.cache[userID] = ctx
 	e.cacheAt[userID] = time.Now()
+	e.opsSinceCleanup++
+
+	if e.opsSinceCleanup >= e.cleanupEach {
+		e.evictExpiredLocked()
+		e.opsSinceCleanup = 0
+	}
+}
+
+func (e *FeishuEnricher) evictExpiredLocked() {
+	now := time.Now()
+	for id, at := range e.cacheAt {
+		if now.Sub(at) >= e.cacheTTL {
+			delete(e.cache, id)
+			delete(e.cacheAt, id)
+		}
+	}
+	if len(e.cache) > e.maxEntries {
+		overflow := len(e.cache) - e.maxEntries
+		count := 0
+		for id := range e.cache {
+			if count >= overflow {
+				break
+			}
+			delete(e.cache, id)
+			delete(e.cacheAt, id)
+			count++
+		}
+	}
 }
 
 func (e *FeishuEnricher) InvalidateCache(userID string) {

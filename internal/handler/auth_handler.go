@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/internal/service"
 	"github.com/husky/husky/pkg/errors"
 	"github.com/husky/husky/pkg/logger"
@@ -94,6 +95,39 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": newToken})
+}
+
+// UpdateProfile 更新当前用户资料
+func (h *AuthHandler) UpdateProfile(c *gin.Context) {
+	userID, _ := c.Get("user_id")
+	uid, ok := userID.(uint)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, errors.NewErrorResponse(errors.ErrUnauthorized, "user not authenticated"))
+		return
+	}
+
+	var req model.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	user, err := h.authService.UpdateProfile(c.Request.Context(), uid, &req)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"id":         user.ID,
+		"email":      user.Email,
+		"username":   user.Username,
+		"role":       user.Role,
+		"avatar":     user.Avatar,
+		"department": user.Department,
+		"title":      user.Title,
+		"phone":      user.Phone,
+	})
 }
 
 // Me 获取当前用户信息

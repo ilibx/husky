@@ -4,10 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/husky/husky/pkg/llm"
 )
+
+var jsonBlockRegex = regexp.MustCompile("```(?:json)?\n([\\s\\S]*?)```")
 
 // IntentType 用户意图类型
 type IntentType string
@@ -85,18 +88,67 @@ func (s *Service) Classify(ctx context.Context, message string) (*IntentResult, 
 		return &IntentResult{Intent: IntentUnknown}, nil
 	}
 
-	content := strings.TrimSpace(chatResp.Content)
-	content = strings.TrimPrefix(content, "```json")
-	content = strings.TrimPrefix(content, "```")
-	content = strings.TrimSuffix(content, "```")
-	content = strings.TrimSpace(content)
+	result, err := parseIntentResult(chatResp.Content)
+	if err == nil {
+		return result, nil
+	}
+
+	// Retry: ask LLM to fix the format
+	retryResp, retryErr := s.chatSvc.Chat(ctx, &llm.ChatRequest{
+		Messages: []llm.ChatMessage{
+			{Role: "system", Content: "你是工单系统的意图识别助手，只返回 JSON。"},
+			{Role: "user", Content: prompt},
+			{Role: "assistant", Content: chatResp.Content},
+			{Role: "user", Content: "你刚才的回复不是合法的 JSON 格式。请重新输出，仅包含合法的 JSON 对象，不要 markdown 代码块。"},
+		},
+		Temperature: 0.1,
+		MaxTokens:   512,
+	})
+	if retryErr != nil {
+		return &IntentResult{Intent: IntentUnknown}, nil
+	}
+
+	result, retryErr = parseIntentResult(retryResp.Content)
+	if retryErr != nil {
+		return &IntentResult{Intent: IntentUnknown}, nil
+	}
+	return result, nil
+}
+
+// parseIntentResult 从 LLM 回复中解析 IntentResult
+func parseIntentResult(content string) (*IntentResult, error) {
+	jsonStr := extractJSON(content)
+	if jsonStr == "" {
+		return nil, fmt.Errorf("no JSON found in response")
+	}
 
 	var result IntentResult
-	if err := json.Unmarshal([]byte(content), &result); err != nil {
-		return &IntentResult{Intent: IntentUnknown}, nil
+	if err := json.Unmarshal([]byte(jsonStr), &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
 	if result.Intent == "" {
 		result.Intent = IntentUnknown
 	}
 	return &result, nil
+}
+
+// extractJSON 从 LLM 回复中提取 JSON 内容，支持多种输出格式
+func extractJSON(text string) string {
+	text = strings.TrimSpace(text)
+
+	// 1. 尝试匹配 markdown 代码块 ```json ... ```
+	if matches := jsonBlockRegex.FindStringSubmatch(text); len(matches) >= 2 {
+		return strings.TrimSpace(matches[1])
+	}
+
+	// 2. 尝试匹配以 { 开头 } 结尾的 JSON
+	start := strings.Index(text, "{")
+	if start >= 0 {
+		end := strings.LastIndex(text, "}")
+		if end > start {
+			return text[start : end+1]
+		}
+	}
+
+	return ""
 }

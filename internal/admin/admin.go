@@ -71,9 +71,6 @@ func newProxyHandler(targetURL string) http.Handler {
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		return nil
-	}
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Host = target.Host

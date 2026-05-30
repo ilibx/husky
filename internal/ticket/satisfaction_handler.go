@@ -1,0 +1,60 @@
+package ticket
+
+import (
+	"net/http"
+
+	"github.com/gin-gonic/gin"
+	"github.com/husky/husky/pkg/errors"
+)
+
+func (h *TicketHandler) RateTicket(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	var req struct {
+		Score   int    `json:"score"`
+		Comment string `json:"comment,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+	uid, ok := userID.(uint)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, errors.NewErrorResponse(errors.ErrUnauthorized, "user not authenticated"))
+		return
+	}
+
+	sat, err := h.ticketService.RateTicket(c.Request.Context(), id, uid, req.Score, req.Comment)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusCreated, sat)
+}
+
+func (h *TicketHandler) GetSatisfaction(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		return
+	}
+
+	sat, err := h.ticketService.GetSatisfaction(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	if sat == nil {
+		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, "not rated yet"))
+		return
+	}
+
+	c.JSON(http.StatusOK, sat)
+}

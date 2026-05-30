@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v4"
-	"github.com/husky/husky/internal/config"
 	"github.com/husky/husky/pkg/errors"
 )
 
@@ -16,7 +15,22 @@ type PermissionsLoader interface {
 	GetRolePermissions(ctx context.Context, role string) (map[string]bool, error)
 }
 
-var permissionsLoader PermissionsLoader
+var (
+	permissionsLoader PermissionsLoader
+	jwtSecret         []byte
+	jwtExpireHour     int
+)
+
+// SetJWTConfig 设置 JWT 密钥和过期时间（由 router 在启动时注入）
+func SetJWTConfig(secret string, expireHour int) {
+	jwtSecret = []byte(secret)
+	jwtExpireHour = expireHour
+}
+
+// jwtKeyFunc 返回 JWT 密钥验证函数
+func jwtKeyFunc(token *jwt.Token) (interface{}, error) {
+	return jwtSecret, nil
+}
 
 // SetPermissionsLoader 设置权限加载器
 func SetPermissionsLoader(loader PermissionsLoader) {
@@ -56,9 +70,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		// 解析 token
 		claims := &Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return []byte(config.Conf.JWTSecret), nil
-		})
+		token, err := jwt.ParseWithClaims(tokenString, claims, jwtKeyFunc)
 
 		if err != nil || !token.Valid {
 			c.JSON(http.StatusUnauthorized, gin.H{
@@ -144,22 +156,20 @@ func GenerateToken(userID uint, username, email, role string) (string, error) {
 		Email:    email,
 		Role:     role,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(config.Conf.JWTExpireHour) * time.Hour)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(jwtExpireHour) * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			Issuer:    "husky",
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return token.SignedString([]byte(config.Conf.JWTSecret))
+	return token.SignedString(jwtSecret)
 }
 
 // RefreshToken 刷新 token
 func RefreshToken(tokenString string) (string, error) {
 	claims := &Claims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-		return []byte(config.Conf.JWTSecret), nil
-	})
+	token, err := jwt.ParseWithClaims(tokenString, claims, jwtKeyFunc)
 
 	if err != nil || !token.Valid {
 		return "", errors.ErrInvalidTokenErr

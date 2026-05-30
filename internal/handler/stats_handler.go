@@ -55,3 +55,14 @@ func (h *StatsHandler) Performance(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, satisfaction)
 }
+
+// AgentPerformance 获取客服绩效统计
+func (h *StatsHandler) AgentPerformance(c *gin.Context) {
+	stats, err := h.statsService.GetAgentPerformance(c.Request.Context())
+	if err != nil {
+		h.log.Error("Failed to get agent performance", "error", err)
+		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"data": stats})
+}

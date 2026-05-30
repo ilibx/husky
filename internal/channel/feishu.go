@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/husky/husky/internal/channel/feishu"
 	"github.com/husky/husky/internal/model"
@@ -117,7 +118,7 @@ func (s *TicketGroupService) autoReply(ctx context.Context, ticket *model.Ticket
 		parts = append(parts, fmt.Sprintf("%s\n%s", rTitle, rContent))
 	}
 
-	replyText := fmt.Sprintf("Found relevant knowledge:\n\n%s\n\nFor further help, reply 'agent'.", joinStrings(parts, "\n\n"))
+	replyText := fmt.Sprintf("Found relevant knowledge:\n\n%s\n\nFor further help, reply 'agent'.", strings.Join(parts, "\n\n"))
 	msg := feishuCardMessage("Knowledge Match Results", replyText, "green")
 	return s.feishuCli.SendCardMessage(ctx, tg.GroupID, msg)
 }
@@ -125,7 +126,7 @@ func (s *TicketGroupService) autoReply(ctx context.Context, ticket *model.Ticket
 func (s *TicketGroupService) detectEscalation(content string) bool {
 	keywords := []string{"human", "agent", "help", "人工", "客服"}
 	for _, kw := range keywords {
-		if containsString(content, kw) {
+		if strings.Contains(content, kw) {
 			return true
 		}
 	}
@@ -188,30 +189,6 @@ func feishuCardMessage(title, content, color string) string {
 func jsonEscape(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
-}
-
-func joinStrings(parts []string, sep string) string {
-	result := ""
-	for i, p := range parts {
-		if i > 0 {
-			result += sep
-		}
-		result += p
-	}
-	return result
-}
-
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && contains(s, substr)
-}
-
-func contains(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
 
 func truncateString(s string, maxLen int) string {

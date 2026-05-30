@@ -18,6 +18,7 @@ type AuthService interface {
 	Register(ctx context.Context, email, username, password string) (*model.User, error)
 	RefreshToken(ctx context.Context, tokenString string) (string, error)
 	GetCurrentUser(ctx context.Context, userID uint) (*model.User, error)
+	UpdateProfile(ctx context.Context, userID uint, req *model.UpdateUserRequest) (*model.User, error)
 }
 
 type authService struct {
@@ -94,4 +95,30 @@ func (s *authService) RefreshToken(ctx context.Context, tokenString string) (str
 
 func (s *authService) GetCurrentUser(ctx context.Context, userID uint) (*model.User, error) {
 	return s.userRepo.GetByID(ctx, userID)
+}
+
+func (s *authService) UpdateProfile(ctx context.Context, userID uint, req *model.UpdateUserRequest) (*model.User, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if req.Username != "" {
+		user.Username = req.Username
+	}
+	if req.Avatar != "" {
+		user.Avatar = req.Avatar
+	}
+	if req.Department != "" {
+		user.Department = req.Department
+	}
+	if req.Title != "" {
+		user.Title = req.Title
+	}
+	if req.Phone != "" {
+		user.Phone = req.Phone
+	}
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }

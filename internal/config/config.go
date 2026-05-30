@@ -63,16 +63,6 @@ type Config struct {
 	LDAPFieldMap string // JSON: {"cn":"username","mail":"email","telephoneNumber":"phone"}
 }
 
-// Conf 全局配置实例
-var Conf *Config
-
-// InitConfig 初始化全局配置
-func InitConfig() error {
-	var err error
-	Conf, err = LoadConfig()
-	return err
-}
-
 // LoadConfig 从环境变量加载配置
 func LoadConfig() (*Config, error) {
 	cfg := &Config{

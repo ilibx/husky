@@ -108,6 +108,17 @@ func (r *WorkflowRepository) UpdateStep(ctx context.Context, step *model.Workflo
 	return r.db.WithContext(ctx).Save(step).Error
 }
 
+// ListFeedbackExamples 获取最近的 HITL 反馈示例（已完成的 human 步骤，有 feedback/decision）
+func (r *WorkflowRepository) ListFeedbackExamples(ctx context.Context, limit int) ([]model.WorkflowStep, error) {
+	var steps []model.WorkflowStep
+	err := r.db.WithContext(ctx).
+		Where("type = 'human' AND status = 'completed' AND decision IN ?", []string{"approve", "reject", "revise"}).
+		Order("created_at DESC").
+		Limit(limit).
+		Find(&steps).Error
+	return steps, err
+}
+
 // ListActiveByAgent 获取某 Agent 的待处理步骤
 func (r *WorkflowRepository) ListStepsByAssignee(ctx context.Context, userID uint, offset, limit int) ([]model.WorkflowStep, int64, error) {
 	var steps []model.WorkflowStep

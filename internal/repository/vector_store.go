@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"strings"
 
 	"github.com/husky/husky/internal/model"
 	"gorm.io/datatypes"
@@ -34,6 +36,12 @@ type VectorStoreRepository interface {
 	IncrementViewCount(ctx context.Context, id string) error
 	// ListHotKnowledge 获取热门知识
 	ListHotKnowledge(ctx context.Context, limit int) ([]model.KnowledgeHotResponse, error)
+	// RecordFeedback 记录知识库反馈
+	RecordFeedback(ctx context.Context, fb *model.KnowledgeFeedback) error
+	// GetFeedbackStats 获取知识库反馈统计
+	GetFeedbackStats(ctx context.Context, knowledgeID string) (*model.KnowledgeFeedbackStats, error)
+	// HasUserFeedbacked 检查用户是否已反馈
+	HasUserFeedbacked(ctx context.Context, knowledgeID string, userID uint) (bool, error)
 }
 
 type vectorStoreRepository struct {
@@ -48,7 +56,10 @@ func NewVectorStoreRepository(db *gorm.DB) VectorStoreRepository {
 func (r *vectorStoreRepository) InsertKnowledge(ctx context.Context, kb *model.KnowledgeBase) error {
 	if len(kb.Vector) == 0 || string(kb.Vector) == "null" {
 		vectorData := make([]float32, 1536)
-		vectorJSON, _ := json.Marshal(vectorData)
+		vectorJSON, err := json.Marshal(vectorData)
+		if err != nil {
+			return fmt.Errorf("marshal default vector: %w", err)
+		}
 		kb.Vector = datatypes.JSON(vectorJSON)
 	}
 	return r.db.WithContext(ctx).Create(kb).Error
@@ -130,17 +141,55 @@ func (r *vectorStoreRepository) SearchSimilar(ctx context.Context, query model.K
 		if kb.Tags != nil {
 			json.Unmarshal(kb.Tags, &tags)
 		}
+		score := computeTextScore(query.Query, kb.Title, kb.Content)
 		response = append(response, model.KnowledgeResponse{
 			ID:       kb.ID,
 			Title:    kb.Title,
 			Content:  kb.Content,
-			Score:    0.5,
+			Score:    score,
 			Category: kb.Category,
 			Tags:     tags,
 		})
 	}
 
 	return response, nil
+}
+
+// computeTextScore 计算文本匹配的相似度得分（0.0 ~ 1.0）
+func computeTextScore(query, title, content string) float32 {
+	if query == "" {
+		return 0.5
+	}
+	query = strings.ToLower(strings.TrimSpace(query))
+	titleLower := strings.ToLower(title)
+	contentLower := strings.ToLower(content)
+
+	// 完全匹配
+	if strings.EqualFold(query, title) {
+		return 1.0
+	}
+	if strings.EqualFold(query, content) {
+		return 1.0
+	}
+
+	terms := strings.Fields(query)
+	if len(terms) == 0 {
+		return 0.5
+	}
+
+	matchedCount := 0
+	for _, t := range terms {
+		if len(t) < 2 {
+			matchedCount++
+			continue
+		}
+		if strings.Contains(titleLower, t) || strings.Contains(contentLower, t) {
+			matchedCount++
+		}
+	}
+
+	ratio := float64(matchedCount) / float64(len(terms))
+	return float32(0.5 + 0.5*math.Min(ratio, 1.0))
 }
 
 // GetKnowledge 获取单个知识条目
@@ -205,4 +254,34 @@ func (r *vectorStoreRepository) ListHotKnowledge(ctx context.Context, limit int)
 		return nil, err
 	}
 	return results, nil
+}
+
+func (r *vectorStoreRepository) RecordFeedback(ctx context.Context, fb *model.KnowledgeFeedback) error {
+	return r.db.WithContext(ctx).Create(fb).Error
+}
+
+func (r *vectorStoreRepository) GetFeedbackStats(ctx context.Context, knowledgeID string) (*model.KnowledgeFeedbackStats, error) {
+	var stats model.KnowledgeFeedbackStats
+	stats.KnowledgeID = knowledgeID
+
+	if err := r.db.WithContext(ctx).Model(&model.KnowledgeFeedback{}).
+		Where("knowledge_id = ?", knowledgeID).
+		Select("COUNT(*) as total_count, SUM(CASE WHEN helpful THEN 1 ELSE 0 END) as helpful_count").
+		Scan(&stats).Error; err != nil {
+		return nil, err
+	}
+	if stats.TotalCount > 0 {
+		stats.HelpfulRate = float64(stats.HelpfulCount) / float64(stats.TotalCount) * 100
+	}
+	return &stats, nil
+}
+
+func (r *vectorStoreRepository) HasUserFeedbacked(ctx context.Context, knowledgeID string, userID uint) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&model.KnowledgeFeedback{}).
+		Where("knowledge_id = ? AND user_id = ?", knowledgeID, userID).
+		Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
