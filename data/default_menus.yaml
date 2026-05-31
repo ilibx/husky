@@ -1,0 +1,108 @@
+# 默认菜单配置
+# roles: 空=全部角色可见, 多个角色用逗号分隔
+menus:
+  - name: 仪表盘
+    path: /dashboard
+    icon: Odometer
+    sort: 0
+
+  - name: 工单管理
+    icon: Ticket
+    sort: 10
+    children:
+      - name: 全部工单
+        path: /tickets
+        sort: 1
+      - name: 我的待办
+        path: /tasks
+        sort: 2
+      - name: SLA 配置
+        path: /sla-configs
+        roles: admin
+        sort: 3
+      - name: 自定义字段
+        path: /ticket-fields
+        roles: admin
+        sort: 4
+
+  - name: 智能服务
+    icon: Cpu
+    sort: 20
+    children:
+      - name: Agent 管理
+        path: /agents
+        sort: 1
+      - name: SOP 管理
+        path: /sops
+        sort: 2
+      - name: Skill 管理
+        path: /skills
+        sort: 3
+      - name: MCP 服务
+        path: /mcps
+        sort: 4
+
+  - name: 资料库管理
+    path: /knowledge
+    icon: Reading
+    sort: 30
+
+  - name: 系统管理
+    icon: Setting
+    sort: 40
+    roles: admin
+    children:
+      - name: 用户管理
+        path: /users
+        roles: admin
+        sort: 1
+      - name: 角色管理
+        path: /roles
+        roles: admin
+        sort: 2
+      - name: 部门管理
+        path: /departments
+        roles: admin
+        sort: 3
+      - name: 分类管理
+        path: /categories
+        roles: admin
+        sort: 4
+      - name: 标签管理
+        path: /tags
+        roles: admin
+        sort: 5
+    - name: 通知管理
+      icon: Bell
+      roles: admin
+      sort: 6
+      children:
+        - name: 通知记录
+          path: /notifications
+          sort: 1
+        - name: Webhook 配置
+          path: /webhook-configs
+          sort: 2
+        - name: 邮件配置
+          path: /email-configs
+          sort: 3
+    - name: LDAP 同步
+      path: /ldap
+      roles: admin
+      sort: 7
+    - name: 菜单管理
+      path: /menus
+      roles: admin
+      sort: 8
+
+  - name: 渠道管理
+    path: /channels
+    icon: Connection
+    sort: 50
+    roles: admin
+
+  - name: 大模型管理
+    path: /system-config
+    icon: Cpu
+    sort: 60
+    roles: admin

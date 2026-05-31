@@ -53,9 +53,33 @@ func (r *TicketRepository) FindOverdueTickets(ctx context.Context, now time.Time
 	return tickets, err
 }
 
-// Update 更新工单（全量 Save）
+// Update 更新工单（带乐观锁）
 func (r *TicketRepository) Update(ctx context.Context, ticket *model.Ticket) error {
-	return r.db.WithContext(ctx).Save(ticket).Error
+	result := r.db.WithContext(ctx).
+		Model(&model.Ticket{}).
+		Where("id = ? AND version = ?", ticket.ID, ticket.Version).
+		Updates(map[string]interface{}{
+			"title":       ticket.Title,
+			"description": ticket.Description,
+			"status":      ticket.Status,
+			"priority":    ticket.Priority,
+			"assignee_id": ticket.AssigneeID,
+			"category_id": ticket.CategoryID,
+			"due_at":      ticket.DueAt,
+			"resolved_at": ticket.ResolvedAt,
+			"closed_at":   ticket.ClosedAt,
+			"sla_status":  ticket.SLAStatus,
+			"source":      ticket.Source,
+			"version":     ticket.Version + 1,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("ticket %d was modified by another process, retry", ticket.ID)
+	}
+	ticket.Version++
+	return nil
 }
 
 // UpdateFields 更新工单的指定字段，避免 Save 覆盖零值

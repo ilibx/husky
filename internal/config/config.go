@@ -4,118 +4,244 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+
+	"gopkg.in/yaml.v3"
 )
 
-// Config 应用配置结构体
-type Config struct {
-	// 服务器配置
-	ServerPort   string
-	ServerMode   string // debug, release, test
-	LogLevel     string
-	LogFormat    string // json, console
-
-	// 数据库配置
-	DBHost            string
-	DBPort            int
-	DBUser            string
-	DBPassword        string
-	DBName            string
-	DBSSLMode         string
-	DBMaxIdleConns    int
-	DBMaxOpenConns    int
-	DBConnMaxLifetime int
-
-	// Redis 配置
-	RedisHost         string
-	RedisPort         string
-	RedisPassword     string
-	RedisDB           int
-	RedisPoolSize     int
-	RedisMinIdleConns int
-
-	// JWT 配置
-	JWTSecret     string
-	JWTExpireHour int
-
-	// 第三方服务配置
-	LLMProvider      string
-	LLMAPIKey        string
-	LLMBaseURL       string
-	VectorDBProvider string
-	VectorDBHost     string
-	VectorDBPort     string
-
-	// 飞书配置
-	FeishuAppID     string
-	FeishuAppSecret string
-
-	// 管理后台配置
-	AdminMode string // embedded, external; default embedded
-	AdminURL string  // external URL for admin UI, e.g. http://localhost:5173
-
-	// LDAP 配置
-	LDAPHost     string
-	LDAPPort     int
-	LDAPBindDN   string
-	LDAPPassword string
-	LDAPBaseDN   string
-	LDAPFilter   string
-	LDAPFieldMap string // JSON: {"cn":"username","mail":"email","telephoneNumber":"phone"}
+type ServerConfig struct {
+	Port     string `yaml:"port"`
+	BasePath string `yaml:"base_path"`
 }
 
-// LoadConfig 从环境变量加载配置
-func LoadConfig() (*Config, error) {
-	cfg := &Config{
-		// 服务器配置
-		ServerPort:   getEnv("SERVER_PORT", "8080"),
-		ServerMode:   getEnv("SERVER_MODE", "debug"),
-		LogLevel:     getEnv("LOG_LEVEL", "info"),
-		LogFormat:    getEnv("LOG_FORMAT", "json"),
-		DBHost:            getEnv("DB_HOST", "localhost"),
-		DBPort:            getEnvAsInt("DB_PORT", 5432),
-		DBUser:            getEnv("DB_USER", "postgres"),
-		DBPassword:        getEnv("DB_PASSWORD", "postgres"),
-		DBName:            getEnv("DB_NAME", "husky"),
-		DBSSLMode:         getEnv("DB_SSLMODE", "disable"),
-		DBMaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 10),
-		DBMaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 100),
-		DBConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME", 3600),
-		RedisHost:         getEnv("REDIS_HOST", "localhost"),
-		RedisPort:         getEnv("REDIS_PORT", "6379"),
-		RedisPassword:     getEnv("REDIS_PASSWORD", ""),
-		RedisDB:           getEnvAsInt("REDIS_DB", 0),
-		RedisPoolSize:     getEnvAsInt("REDIS_POOL_SIZE", 100),
-		RedisMinIdleConns: getEnvAsInt("REDIS_MIN_IDLE_CONNS", 5),
-		JWTSecret:    getEnv("JWT_SECRET", "husky-secret-key-change-in-production"),
-		JWTExpireHour: getEnvAsInt("JWT_EXPIRE_HOUR", 24),
-		LLMProvider:   getEnv("LLM_PROVIDER", "openai"),
-		LLMAPIKey:     getEnv("LLM_API_KEY", ""),
-		LLMBaseURL:    getEnv("LLM_BASE_URL", "https://api.openai.com/v1"),
-		VectorDBProvider: getEnv("VECTOR_DB_PROVIDER", "pgvector"),
-		VectorDBHost:     getEnv("VECTOR_DB_HOST", "localhost"),
-		VectorDBPort:     getEnv("VECTOR_DB_PORT", "5432"),
-		FeishuAppID:     getEnv("FEISHU_APP_ID", ""),
-		FeishuAppSecret: getEnv("FEISHU_APP_SECRET", ""),
-		AdminMode:       getEnv("ADMIN_MODE", "embedded"),
-		AdminURL:        getEnv("ADMIN_URL", "http://localhost:5173"),
-		LDAPHost:        getEnv("LDAP_HOST", ""),
-		LDAPPort:        getEnvAsInt("LDAP_PORT", 389),
-		LDAPBindDN:      getEnv("LDAP_BIND_DN", ""),
-		LDAPPassword:    getEnv("LDAP_PASSWORD", ""),
-		LDAPBaseDN:      getEnv("LDAP_BASE_DN", ""),
-		LDAPFilter:      getEnv("LDAP_FILTER", "(objectClass=person)"),
-		LDAPFieldMap:    getEnv("LDAP_FIELD_MAP", `{"cn":"username","mail":"email"}`),
+type LogConfig struct {
+	Level  string `yaml:"level"`
+	Format string `yaml:"format"`
+}
+
+type DatabaseConfig struct {
+	Provider        string `yaml:"provider"`
+	Host            string `yaml:"host"`
+	Port            int    `yaml:"port"`
+	User            string `yaml:"username"`
+	Password        string `yaml:"password"`
+	Name            string `yaml:"name"`
+	SSLMode         string `yaml:"sslmode"`
+	MaxIdleConns    int    `yaml:"max_idle_conns"`
+	MaxOpenConns    int    `yaml:"max_open_conns"`
+	ConnMaxLifetime int    `yaml:"conn_max_lifetime"`
+}
+
+type CacheConfig struct {
+	Provider     string `yaml:"provider"`
+	Enable       bool   `yaml:"enable"`
+	Host         string `yaml:"host"`
+	Port         string `yaml:"port"`
+	Password     string `yaml:"password"`
+	DB           int    `yaml:"db"`
+	PoolSize     int    `yaml:"pool_size"`
+	MinIdleConns int    `yaml:"min_idle_conns"`
+}
+
+type JWTConfig struct {
+	Secret     string `yaml:"secret"`
+	ExpireHour int    `yaml:"expire_hour"`
+}
+
+type LDAPConfig struct {
+	Enable   bool   `yaml:"enable"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	BindDN   string `yaml:"bind_dn"`
+	Password string `yaml:"password"`
+	BaseDN   string `yaml:"base_dn"`
+	Filter   string `yaml:"filter"`
+	FieldMap string `yaml:"field_map"`
+}
+
+type CORSConfig struct {
+	AllowedOrigins string `yaml:"allowed_origins"`
+	AllowedMethods string `yaml:"allowed_methods"`
+	AllowedHeaders string `yaml:"allowed_headers"`
+}
+
+type StorageConfig struct {
+	Provider string            `yaml:"provider"`
+	Options  map[string]string `yaml:"options"`
+}
+
+func DefaultStorageConfig() StorageConfig {
+	return StorageConfig{
+		Provider: "local",
+		Options:  map[string]string{"root": "./data/knowledge"},
+	}
+}
+
+type Config struct {
+	Server   ServerConfig   `yaml:"server"`
+	Log      LogConfig      `yaml:"log"`
+	Database DatabaseConfig `yaml:"database"`
+	Cache    CacheConfig    `yaml:"cache"`
+	JWT      JWTConfig      `yaml:"jwt"`
+	LDAP     LDAPConfig     `yaml:"ldap"`
+	Storage  StorageConfig  `yaml:"storage"`
+	CORS     CORSConfig     `yaml:"cors"`
+}
+
+func LoadConfig(path string) (*Config, error) {
+	if path == "" {
+		path = "config.yaml"
 	}
 
-	// 验证必要配置
-	if cfg.JWTSecret == "husky-secret-key-change-in-production" {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read config file %s: %w", path, err)
+	}
+
+	cfg := &Config{
+		Cache:   CacheConfig{Enable: true},
+		LDAP:    LDAPConfig{Enable: true},
+		Storage: DefaultStorageConfig(),
+	}
+	if err := yaml.Unmarshal(data, cfg); err != nil {
+		return nil, fmt.Errorf("parse config file %s: %w", path, err)
+	}
+
+	setDefaults(cfg)
+
+	if cfg.JWT.Secret == "husky-secret-key-change-in-production" {
 		fmt.Println("WARNING: Using default JWT secret. Please change in production!")
 	}
 
 	return cfg, nil
 }
 
-// getEnv 获取环境变量，如果不存在则返回默认值
+func setDefaults(cfg *Config) {
+	if cfg.Server.Port == "" {
+		cfg.Server.Port = "8080"
+	}
+	if cfg.Log.Level == "" {
+		cfg.Log.Level = "info"
+	}
+	if cfg.Log.Format == "" {
+		cfg.Log.Format = "console"
+	}
+	if cfg.Database.Provider == "" {
+		cfg.Database.Provider = "postgresql"
+	}
+	if cfg.Database.Host == "" {
+		cfg.Database.Host = "localhost"
+	}
+	if cfg.Database.Port == 0 {
+		cfg.Database.Port = 5432
+	}
+	if cfg.Database.User == "" {
+		cfg.Database.User = "postgres"
+	}
+	if cfg.Database.Password == "" {
+		cfg.Database.Password = "postgres"
+	}
+	if cfg.Database.Name == "" {
+		cfg.Database.Name = "husky"
+	}
+	if cfg.Database.SSLMode == "" {
+		cfg.Database.SSLMode = "disable"
+	}
+	if cfg.Database.MaxIdleConns <= 0 {
+		cfg.Database.MaxIdleConns = 10
+	}
+	if cfg.Database.MaxOpenConns <= 0 {
+		cfg.Database.MaxOpenConns = 100
+	}
+	if cfg.Database.ConnMaxLifetime <= 0 {
+		cfg.Database.ConnMaxLifetime = 3600
+	}
+	if cfg.Cache.Provider == "" {
+		cfg.Cache.Provider = "redis"
+	}
+	if cfg.Cache.Host == "" {
+		cfg.Cache.Host = "localhost"
+	}
+	if cfg.Cache.Port == "" {
+		cfg.Cache.Port = "6379"
+	}
+	if cfg.Cache.PoolSize <= 0 {
+		cfg.Cache.PoolSize = 100
+	}
+	if cfg.Cache.MinIdleConns <= 0 {
+		cfg.Cache.MinIdleConns = 5
+	}
+	if cfg.JWT.Secret == "" {
+		cfg.JWT.Secret = "husky-secret-key-change-in-production"
+	}
+	if cfg.JWT.ExpireHour <= 0 {
+		cfg.JWT.ExpireHour = 24
+	}
+	if cfg.LDAP.Port <= 0 {
+		cfg.LDAP.Port = 389
+	}
+	if cfg.LDAP.Filter == "" {
+		cfg.LDAP.Filter = "(objectClass=person)"
+	}
+	if cfg.LDAP.FieldMap == "" {
+		cfg.LDAP.FieldMap = `{"cn":"username","mail":"email"}`
+	}
+	if cfg.CORS.AllowedOrigins == "" {
+		cfg.CORS.AllowedOrigins = "*"
+	}
+	if cfg.CORS.AllowedMethods == "" {
+		cfg.CORS.AllowedMethods = "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+	}
+	if cfg.CORS.AllowedHeaders == "" {
+		cfg.CORS.AllowedHeaders = "Origin,Content-Type,Accept,Authorization,X-Requested-With"
+	}
+}
+
+func LoadConfigFromEnv() (*Config, error) {
+	cfg := &Config{
+		Cache:  CacheConfig{Enable: true},
+		Server: ServerConfig{
+			Port: getEnv("SERVER_PORT", "8080"),
+		},
+		Log: LogConfig{
+			Level:  getEnv("LOG_LEVEL", "info"),
+			Format: getEnv("LOG_FORMAT", "json"),
+		},
+		Database: DatabaseConfig{
+			Host:            getEnv("DB_HOST", "localhost"),
+			Port:            getEnvAsInt("DB_PORT", 5432),
+			User:            getEnv("DB_USER", "postgres"),
+			Password:        getEnv("DB_PASSWORD", "postgres"),
+			Name:            getEnv("DB_NAME", "husky"),
+			SSLMode:         getEnv("DB_SSLMODE", "disable"),
+			MaxIdleConns:    getEnvAsInt("DB_MAX_IDLE_CONNS", 10),
+			MaxOpenConns:    getEnvAsInt("DB_MAX_OPEN_CONNS", 100),
+			ConnMaxLifetime: getEnvAsInt("DB_CONN_MAX_LIFETIME", 3600),
+		},
+		JWT: JWTConfig{
+			Secret:     getEnv("JWT_SECRET", "husky-secret-key-change-in-production"),
+			ExpireHour: getEnvAsInt("JWT_EXPIRE_HOUR", 24),
+		},
+		LDAP: LDAPConfig{
+			Enable:   true,
+			Host:     getEnv("LDAP_HOST", ""),
+			Port:     getEnvAsInt("LDAP_PORT", 389),
+			BindDN:   getEnv("LDAP_BIND_DN", ""),
+			Password: getEnv("LDAP_PASSWORD", ""),
+			BaseDN:   getEnv("LDAP_BASE_DN", ""),
+			Filter:   getEnv("LDAP_FILTER", "(objectClass=person)"),
+			FieldMap: getEnv("LDAP_FIELD_MAP", `{"cn":"username","mail":"email"}`),
+		},
+	}
+
+	setDefaults(cfg)
+
+	if cfg.JWT.Secret == "husky-secret-key-change-in-production" {
+		fmt.Println("WARNING: Using default JWT secret. Please change in production!")
+	}
+
+	return cfg, nil
+}
+
 func getEnv(key, defaultValue string) string {
 	value := os.Getenv(key)
 	if value == "" {
@@ -124,7 +250,6 @@ func getEnv(key, defaultValue string) string {
 	return value
 }
 
-// getEnvAsInt 获取环境变量并转换为整数
 func getEnvAsInt(key string, defaultValue int) int {
 	value := os.Getenv(key)
 	if value == "" {

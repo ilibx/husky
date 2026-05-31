@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/husky/husky/internal/model"
+	"github.com/husky/husky/pkg/vectorstore"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -45,12 +46,18 @@ type VectorStoreRepository interface {
 }
 
 type vectorStoreRepository struct {
-	db *gorm.DB
+	db    *gorm.DB
+	store vectorstore.Store
 }
 
 // NewVectorStoreRepository 创建向量存储仓库实例
 func NewVectorStoreRepository(db *gorm.DB) VectorStoreRepository {
 	return &vectorStoreRepository{db: db}
+}
+
+// NewVectorStoreRepositoryWithStore 创建向量存储仓库实例并附加外部向量存储后端
+func NewVectorStoreRepositoryWithStore(db *gorm.DB, store vectorstore.Store) VectorStoreRepository {
+	return &vectorStoreRepository{db: db, store: store}
 }
 
 func (r *vectorStoreRepository) InsertKnowledge(ctx context.Context, kb *model.KnowledgeBase) error {
@@ -72,8 +79,54 @@ func (r *vectorStoreRepository) SearchSimilar(ctx context.Context, query model.K
 		limit = 5
 	}
 
-	var results []model.KnowledgeBase
+	// When an external vector store is configured (e.g., Neo4j), delegate
+	// vector search to the store, then fetch metadata from the main DB.
+	if r.store != nil && len(queryVector) > 0 {
+		storeResults, err := r.store.SearchSimilar(ctx, queryVector, limit)
+		if err != nil {
+			return nil, fmt.Errorf("external vector store search: %w", err)
+		}
+		// Build score map
+		scoreMap := make(map[string]float32, len(storeResults))
+		ids := make([]string, 0, len(storeResults))
+		for _, sr := range storeResults {
+			scoreMap[sr.ID] = sr.Score
+			ids = append(ids, sr.ID)
+		}
+		// Fetch full knowledge entries from the main DB
+		var kbs []model.KnowledgeBase
+		if len(ids) > 0 {
+			dbQuery := r.db.WithContext(ctx).Model(&model.KnowledgeBase{}).Where("id IN ?", ids)
+			if query.Category != "" {
+				dbQuery = dbQuery.Where("category = ?", query.Category)
+			}
+			if len(query.Tags) > 0 {
+				tagsJSON, _ := json.Marshal(query.Tags)
+				dbQuery = dbQuery.Where("tags @> ?", string(tagsJSON))
+			}
+			if err := dbQuery.Find(&kbs).Error; err != nil {
+				return nil, fmt.Errorf("fetch knowledge by ids: %w", err)
+			}
+		}
+		response := make([]model.KnowledgeResponse, 0, len(kbs))
+		for _, kb := range kbs {
+			var tags []string
+			if kb.Tags != nil {
+				json.Unmarshal(kb.Tags, &tags)
+			}
+			response = append(response, model.KnowledgeResponse{
+				ID:       kb.ID,
+				Title:    kb.Title,
+				Content:  kb.Content,
+				Score:    scoreMap[kb.ID],
+				Category: kb.Category,
+				Tags:     tags,
+			})
+		}
+		return response, nil
+	}
 
+	// pgvector search (default)
 	if len(queryVector) > 0 {
 		vectorJSON, _ := json.Marshal(queryVector)
 		rawSQL := `SELECT id, title, content, category, tags, vector, status, created_by,
@@ -119,6 +172,8 @@ func (r *vectorStoreRepository) SearchSimilar(ctx context.Context, query model.K
 		return response, nil
 	}
 
+	// Fallback: text ILIKE search
+	var results []model.KnowledgeBase
 	dbQuery := r.db.WithContext(ctx).Model(&model.KnowledgeBase{}).Where("status = ?", "active")
 	if query.Query != "" {
 		keyword := "%" + query.Query + "%"

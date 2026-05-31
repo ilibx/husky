@@ -24,33 +24,33 @@ func (h *CRUDHandler) ListWorkflows(c *gin.Context) {
 
 	list, total, err := h.workflowSvc.ListWorkflows(c.Request.Context(), offset, limit, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": list, "total": total})
+	httputil.Success(c, gin.H{"data": list, "total": total})
 }
 
 func (h *CRUDHandler) GetWorkflow(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid id")
 		return
 	}
 
 	wf, err := h.workflowSvc.GetWorkflowByID(c.Request.Context(), uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, err.Error()))
+		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, wf)
+	httputil.Success(c, wf)
 }
 
 func (h *CRUDHandler) CompleteStep(c *gin.Context) {
 	stepIDStr := c.Param("stepId")
 	stepID, err := strconv.ParseUint(stepIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid step id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid step id")
 		return
 	}
 
@@ -58,16 +58,16 @@ func (h *CRUDHandler) CompleteStep(c *gin.Context) {
 		Result string `json:"result"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	if err := h.workflowSvc.CompleteHumanStep(c.Request.Context(), uint(stepID), req.Result); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "step completed"})
+	httputil.Success(c, gin.H{"message": "step completed"})
 }
 
 func (h *CRUDHandler) PendingSteps(c *gin.Context) {
@@ -79,10 +79,10 @@ func (h *CRUDHandler) PendingSteps(c *gin.Context) {
 
 	steps, total, err := h.workflowSvc.ListPendingSteps(c.Request.Context(), userID.(uint), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"data": steps, "total": total})
+	httputil.Success(c, gin.H{"data": steps, "total": total})
 }
 
 // ApproveStep 审核通过人工步骤
@@ -90,7 +90,7 @@ func (h *CRUDHandler) ApproveStep(c *gin.Context) {
 	stepIDStr := c.Param("stepId")
 	stepID, err := strconv.ParseUint(stepIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid step id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid step id")
 		return
 	}
 
@@ -102,16 +102,16 @@ func (h *CRUDHandler) ApproveStep(c *gin.Context) {
 		Result   string `json:"result,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid request body"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid request body")
 		return
 	}
 
 	if err := h.workflowSvc.ApproveStep(c.Request.Context(), uint(stepID), uid, req.Feedback, req.Result); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "step approved"})
+	httputil.Success(c, gin.H{"message": "step approved"})
 }
 
 // RejectStep 拒绝人工步骤
@@ -119,7 +119,7 @@ func (h *CRUDHandler) RejectStep(c *gin.Context) {
 	stepIDStr := c.Param("stepId")
 	stepID, err := strconv.ParseUint(stepIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid step id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid step id")
 		return
 	}
 
@@ -130,16 +130,16 @@ func (h *CRUDHandler) RejectStep(c *gin.Context) {
 		Reason string `json:"reason" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "reason is required"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "reason is required")
 		return
 	}
 
 	if err := h.workflowSvc.RejectStep(c.Request.Context(), uint(stepID), uid, req.Reason); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "step rejected", "reason": req.Reason})
+	httputil.Success(c, gin.H{"message": "step rejected", "reason": req.Reason})
 }
 
 // ReviseStep 要求修改（打回重做）
@@ -147,7 +147,7 @@ func (h *CRUDHandler) ReviseStep(c *gin.Context) {
 	stepIDStr := c.Param("stepId")
 	stepID, err := strconv.ParseUint(stepIDStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid step id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid step id")
 		return
 	}
 
@@ -158,14 +158,14 @@ func (h *CRUDHandler) ReviseStep(c *gin.Context) {
 		Feedback string `json:"feedback" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "feedback is required"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "feedback is required")
 		return
 	}
 
 	if err := h.workflowSvc.ReviseStep(c.Request.Context(), uint(stepID), uid, req.Feedback); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "step sent back for revision"})
+	httputil.Success(c, gin.H{"message": "step sent back for revision"})
 }

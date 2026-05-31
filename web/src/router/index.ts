@@ -86,23 +86,23 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '渠道配置', icon: 'Connection' },
       },
       {
-        path: 'bot-config',
-        name: 'BotConfig',
-        component: () => import('@/views/botconfig/BotConfig.vue'),
-        meta: { title: 'Bot 配置', icon: 'ChatDotSquare' },
-      },
-      {
         path: 'ticket-fields',
         name: 'TicketFields',
         component: () => import('@/views/ticketfields/TicketFields.vue'),
         meta: { title: '自定义字段', icon: 'Setting' },
       },
-      {
-        path: 'ldap',
-        name: 'LDAP',
-        component: () => import('@/views/ldap/LDAPSync.vue'),
-        meta: { title: 'LDAP 同步', icon: 'RefreshRight' },
-      },
+        {
+          path: 'ldap',
+          name: 'LDAP',
+          component: () => import('@/views/ldap/LDAPSync.vue'),
+          meta: { title: 'LDAP 同步', icon: 'RefreshRight' },
+        },
+        {
+          path: 'email-configs',
+          name: 'EmailConfigs',
+          component: () => import('@/views/email/EmailConfigList.vue'),
+          meta: { title: '邮件配置', icon: 'Mail' },
+        },
       {
         path: 'sla-configs',
         name: 'SLAConfigs',
@@ -121,7 +121,31 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/notifications/NotificationList.vue'),
         meta: { title: '通知中心', icon: 'Bell' },
       },
-    ],
+      {
+        path: 'system-config',
+        name: 'SystemConfig',
+        component: () => import('@/views/systemconfig/SystemConfig.vue'),
+        meta: { title: '系统配置', icon: 'Setting' },
+        },
+        {
+          path: 'skills',
+          name: 'Skills',
+          component: () => import('@/views/skills/SkillManagement.vue'),
+          meta: { title: 'Skill 管理', icon: 'Puzzle' },
+        },
+        {
+          path: 'mcps',
+          name: 'MCPs',
+          component: () => import('@/views/mcps/MCPManagement.vue'),
+          meta: { title: 'MCP 服务', icon: 'Cpu' },
+        },
+        {
+          path: 'menus',
+          name: 'Menus',
+          component: () => import('@/views/menus/MenuManagement.vue'),
+          meta: { title: '菜单管理', icon: 'Menu' },
+        },
+      ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
 ]
@@ -131,10 +155,21 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   document.title = `${to.meta.title as string} - 工单管理系统`
   if (to.meta.noAuth) return next()
   if (!getToken()) return next('/login')
+  // Load user info if not loaded yet
+  const { useUserStore } = await import('@/stores/user')
+  const user = useUserStore()
+  if (!user.userInfo) {
+    try {
+      await user.fetchUserInfo()
+    } catch {
+      user.logout()
+      return next('/login')
+    }
+  }
   next()
 })
 

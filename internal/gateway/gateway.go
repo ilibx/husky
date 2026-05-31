@@ -20,6 +20,7 @@ type Gateway struct {
 	botCfgRepo BotConfigProvider
 	intentSvc  *intent.Service
 	enrichers  map[ChannelType]UserEnricher
+	userLookup UserLookup
 	log        *logger.Logger
 }
 
@@ -32,6 +33,11 @@ type BotConfigProvider interface {
 	GetBotConfig(ctx context.Context, channel string) (*model.BotConfig, error)
 }
 
+// UserLookup resolves a channel user (by email or channel_id) to a local user ID.
+type UserLookup interface {
+	GetByEmail(ctx context.Context, email string) (*model.User, error)
+}
+
 func NewGateway(
 	ticketSvc ticket.TicketCreator,
 	feishuCli *feishu.Client,
@@ -40,6 +46,7 @@ func NewGateway(
 	botCfgRepo BotConfigProvider,
 	intentSvc *intent.Service,
 	enrichers map[ChannelType]UserEnricher,
+	userLookup UserLookup,
 	log *logger.Logger,
 ) *Gateway {
 	return &Gateway{
@@ -50,6 +57,7 @@ func NewGateway(
 		botCfgRepo: botCfgRepo,
 		intentSvc:  intentSvc,
 		enrichers:  enrichers,
+		userLookup: userLookup,
 		log:        log,
 	}
 }
@@ -64,7 +72,11 @@ func (g *Gateway) HandleIncoming(ctx context.Context, msg *IncomingMessage) (*mo
 	}
 
 	// 1. Intent classification
-	intentResult, _ := g.classifyIntent(ctx, msg.Content)
+	intentResult, intentErr := g.classifyIntent(ctx, msg.Content)
+	if intentErr != nil {
+		g.log.Warn("Gateway: intent classification failed, falling back to default",
+			"error", intentErr, "channel", msg.Channel)
+	}
 
 	switch intentResult.Intent {
 	case intent.IntentGreeting:
@@ -82,7 +94,7 @@ func (g *Gateway) HandleIncoming(ctx context.Context, msg *IncomingMessage) (*mo
 			return nil, nil
 		}
 		g.sendWelcome(ctx, msg)
-		ticketReq := g.buildTicketRequest(msg)
+		ticketReq := g.buildTicketRequest(ctx, msg)
 		resp, err := g.ticketSvc.CreateTicket(ctx, ticketReq)
 		if err != nil {
 			return nil, fmt.Errorf("gateway: create ticket: %w", err)

@@ -11,7 +11,7 @@ import (
 func (h *TicketHandler) AddComment(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
@@ -20,30 +20,30 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 		IsInternal bool   `json:"is_internal"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	userID, _ := c.Get("user_id")
 	uid, ok := userID.(uint)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, errors.NewErrorResponse(errors.ErrUnauthorized, "user not authenticated"))
+		httputil.Error(c, http.StatusUnauthorized, errors.ErrUnauthorized, "user not authenticated")
 		return
 	}
 
 	comment, err := h.ticketService.AddComment(c.Request.Context(), id, uid, req.Content, req.IsInternal)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, comment)
+	httputil.Created(c, comment)
 }
 
 func (h *TicketHandler) GetComments(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
@@ -54,11 +54,11 @@ func (h *TicketHandler) GetComments(c *gin.Context) {
 
 	comments, total, err := h.ticketService.ListComments(c.Request.Context(), id, offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"data":  comments,
 		"total": total,
 	})

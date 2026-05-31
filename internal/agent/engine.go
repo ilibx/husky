@@ -18,6 +18,7 @@ type RuleAgentService interface {
 	AssignTicket(ctx context.Context, id, assigneeID uint) error
 	AutoAssignTicket(ctx context.Context, id uint) (*uint, error)
 	UpdateStatus(ctx context.Context, id uint, status string) error
+	SetPriority(ctx context.Context, id uint, priority string) error
 }
 
 type Engine struct {
@@ -111,9 +112,7 @@ func (e *Engine) runRuleAgent(ctx context.Context, agent model.Agent, ticket *mo
 		}
 	case "set_priority":
 		if model.IsValidPriority(config.SetPriority) {
-			if err := e.ticketRepo.UpdateFields(ctx, ticket.ID, map[string]interface{}{
-				"priority": config.SetPriority,
-			}); err != nil {
+			if err := e.ruleSvc.SetPriority(ctx, ticket.ID, config.SetPriority); err != nil {
 				log.Printf("rule agent set_priority failed: %v", err)
 				return
 			}

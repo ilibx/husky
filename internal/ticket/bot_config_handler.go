@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/pkg/errors"
+	"github.com/husky/husky/pkg/httputil"
 )
 
 // --- Bot Config ---
@@ -14,21 +15,21 @@ func (h *TicketHandler) GetBotConfig(c *gin.Context) {
 	channel := c.Param("channel")
 	cfg, err := h.ticketService.GetBotConfig(c.Request.Context(), channel)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, cfg)
+	httputil.Success(c, cfg)
 }
 
 func (h *TicketHandler) SetBotConfig(c *gin.Context) {
 	var cfg model.BotConfig
 	if err := c.ShouldBindJSON(&cfg); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 	if err := h.ticketService.SetBotConfig(c.Request.Context(), &cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, cfg)
+	httputil.Success(c, cfg)
 }

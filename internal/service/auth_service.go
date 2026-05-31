@@ -31,7 +31,7 @@ func NewAuthService(userRepo *repository.UserRepository) AuthService {
 }
 
 func (s *authService) Login(ctx context.Context, email, password string) (string, *model.User, error) {
-	user, err := s.userRepo.GetByEmail(ctx, email)
+	user, err := s.userRepo.GetByLogin(ctx, email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return "", nil, errors.New("invalid email or password")

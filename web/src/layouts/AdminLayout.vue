@@ -1,47 +1,52 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
+import request from '@/api/request'
 
 const router = useRouter()
 const route = useRoute()
 const user = useUserStore()
 const app = useAppStore()
+const unreadCount = ref(0)
+const menuItems = ref<any[]>([])
+const menuLoading = ref(true)
+let pollTimer: ReturnType<typeof setInterval> | undefined
 
-interface MenuItem { path?: string; label: string; icon?: string; children?: MenuItem[] }
-const menuItems: MenuItem[] = [
-  { path: '/dashboard', label: '仪表盘', icon: 'Odometer' },
-  { path: '/tickets', label: '工单管理', icon: 'Ticket' },
-  { path: '/tasks', label: '我的待办', icon: 'List' },
-  { path: '/notifications', label: '通知中心', icon: 'Bell' },
-  { path: '/users', label: '用户管理', icon: 'User' },
-  {
-    label: '智能服务', icon: 'Cpu',
-    children: [
-      { path: '/knowledge', label: '知识库管理', icon: 'Reading' },
-      { path: '/agents', label: 'Agent 管理', icon: 'Cpu' },
-      { path: '/bot-config', label: 'Bot 配置', icon: 'ChatDotSquare' },
-    ],
-  },
-  {
-    label: '系统设置', icon: 'Setting',
-    children: [
-      { path: '/categories', label: '分类管理', icon: 'FolderOpened' },
-      { path: '/departments', label: '部门管理', icon: 'OfficeBuilding' },
-      { path: '/roles', label: '角色管理', icon: 'Key' },
-      { path: '/tags', label: '标签管理', icon: 'PriceTag' },
-      { path: '/channels', label: '渠道配置', icon: 'Connection' },
-      { path: '/ticket-fields', label: '自定义字段', icon: 'Setting' },
-      { path: '/ldap', label: 'LDAP 同步', icon: 'RefreshRight' },
-      { path: '/sla-configs', label: 'SLA 配置', icon: 'Timer' },
-      { path: '/webhook-configs', label: 'Webhook 配置', icon: 'Connection' },
-    ],
-  },
-  { path: '/sops', label: 'SOP 管理', icon: 'List' },
-]
+async function fetchUnreadCount() {
+  try {
+    const res: any = await request.get('/notifications/unread-count')
+    unreadCount.value = res.count ?? res.data?.count ?? 0
+  } catch {
+    unreadCount.value = 0
+  }
+}
 
-const activeMenu = computed(() => route.path)
+async function fetchMenus() {
+  try {
+    const res: any = await request.get('/menus')
+    menuItems.value = res.data?.data || []
+  } catch {
+    menuItems.value = []
+  } finally {
+    menuLoading.value = false
+  }
+}
+
+function goToNotifications() {
+  router.push('/notifications')
+}
+
+onMounted(() => {
+  fetchMenus()
+  fetchUnreadCount()
+  pollTimer = setInterval(fetchUnreadCount, 30000)
+})
+
+onUnmounted(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 
 function handleLogout() {
   user.logout()
@@ -54,27 +59,27 @@ function handleLogout() {
     <el-aside :width="app.sidebarCollapsed ? '64px' : '220px'" class="aside">
       <div class="logo">{{ app.sidebarCollapsed ? 'HA' : '工单管理' }}</div>
       <el-menu
-        :default-active="activeMenu"
+        :default-active="route.path"
         :collapse="app.sidebarCollapsed"
         router
         background-color="#304156"
         text-color="#bfcbd9"
         active-text-color="#409eff"
       >
-        <template v-for="item in menuItems" :key="item.label">
-          <el-sub-menu v-if="item.children" :index="item.label">
+        <template v-for="item in menuItems" :key="item.id || item.name">
+          <el-sub-menu v-if="item.children && item.children.length" :index="item.name">
             <template #title>
               <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
-              <span>{{ item.label }}</span>
+              <span>{{ item.name }}</span>
             </template>
             <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path!">
               <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
-              <template #title>{{ child.label }}</template>
+              <template #title>{{ child.name }}</template>
             </el-menu-item>
           </el-sub-menu>
           <el-menu-item v-else :index="item.path!">
             <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
-            <template #title>{{ item.label }}</template>
+            <template #title>{{ item.name }}</template>
           </el-menu-item>
         </template>
       </el-menu>
@@ -93,6 +98,11 @@ function handleLogout() {
           </el-breadcrumb>
         </div>
         <div class="header-right">
+          <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notif-badge">
+            <el-icon size="20" class="notif-icon" @click="goToNotifications">
+              <Bell />
+            </el-icon>
+          </el-badge>
           <el-dropdown trigger="click">
             <span class="user-info">
               <el-avatar :size="28" :icon="'UserFilled'" />
@@ -117,8 +127,16 @@ function handleLogout() {
 <style scoped>
 .aside {
   transition: width 0.3s;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: #304156;
+}
+.aside::-webkit-scrollbar {
+  width: 4px;
+}
+.aside::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
 }
 .logo {
   height: 56px;
@@ -156,6 +174,18 @@ function handleLogout() {
   align-items: center;
   gap: 8px;
   cursor: pointer;
+}
+.notif-icon {
+  cursor: pointer;
+  margin-right: 16px;
+  color: #666;
+}
+.notif-icon:hover {
+  color: #409eff;
+}
+.notif-badge :deep(.el-badge__content) {
+  top: 8px;
+  right: 14px;
 }
 .main {
   background: #f0f2f5;

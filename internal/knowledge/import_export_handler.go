@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/pkg/errors"
+	"github.com/husky/husky/pkg/httputil"
 )
 
 func (h *Handler) ImportKnowledge(c *gin.Context) {
@@ -27,29 +28,29 @@ func (h *Handler) ImportKnowledge(c *gin.Context) {
 func (h *Handler) importJSON(c *gin.Context) {
 	var items []model.KnowledgeBase
 	if err := c.ShouldBindJSON(&items); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	count, err := h.knowledgeService.ImportKnowledge(c.Request.Context(), items)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "import complete", "imported": count})
+	httputil.Success(c, gin.H{"message": "import complete", "imported": count})
 }
 
 func (h *Handler) importCSV(c *gin.Context) {
 	file, err := c.FormFile("file")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "file is required"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "file is required")
 		return
 	}
 
 	f, err := file.Open()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, "failed to open file"))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, "failed to open file")
 		return
 	}
 	defer func() {
@@ -61,12 +62,12 @@ func (h *Handler) importCSV(c *gin.Context) {
 	reader := csv.NewReader(f)
 	records, err := reader.ReadAll()
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "failed to parse CSV: "+err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "failed to parse CSV: "+err.Error())
 		return
 	}
 
 	if len(records) < 2 {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "CSV must have header and at least one row"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "CSV must have header and at least one row")
 		return
 	}
 
@@ -108,17 +109,17 @@ func (h *Handler) importCSV(c *gin.Context) {
 	}
 
 	if len(items) == 0 {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "no valid items found in CSV"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "no valid items found in CSV")
 		return
 	}
 
 	count, err := h.knowledgeService.ImportKnowledge(c.Request.Context(), items)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "import complete", "imported": count})
+	httputil.Success(c, gin.H{"message": "import complete", "imported": count})
 }
 
 func (h *Handler) ExportKnowledge(c *gin.Context) {
@@ -135,17 +136,17 @@ func (h *Handler) ExportKnowledge(c *gin.Context) {
 func (h *Handler) exportJSON(c *gin.Context) {
 	items, err := h.knowledgeService.ExportKnowledge(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": items, "total": len(items)})
+	httputil.Success(c, gin.H{"data": items, "total": len(items)})
 }
 
 func (h *Handler) exportCSV(c *gin.Context) {
 	items, err := h.knowledgeService.ExportKnowledge(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 

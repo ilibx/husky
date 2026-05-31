@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/pkg/errors"
+	"github.com/husky/husky/pkg/httputil"
 )
 
 // --- Assign Config ---
@@ -23,17 +24,17 @@ func (h *TicketHandler) GetAssignConfig(c *gin.Context) {
 
 	cfg, err := h.ticketService.GetAssignConfig(c.Request.Context(), categoryID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, cfg)
+	httputil.Success(c, cfg)
 }
 
 func (h *TicketHandler) SetAssignConfig(c *gin.Context) {
 	var req model.AssignConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
@@ -43,9 +44,9 @@ func (h *TicketHandler) SetAssignConfig(c *gin.Context) {
 	}
 
 	if err := h.ticketService.SetAssignConfig(c.Request.Context(), cfg); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, cfg)
+	httputil.Success(c, cfg)
 }

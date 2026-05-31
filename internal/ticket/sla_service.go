@@ -21,6 +21,13 @@ type SLAEventHandler interface {
 	SendToChannel(ctx context.Context, channel, targetID, content string) error
 }
 
+// SLAEventAdapterFunc is a functional adapter for SLAEventHandler.
+type SLAEventAdapterFunc func(ctx context.Context, channel, targetID, content string) error
+
+func (f SLAEventAdapterFunc) SendToChannel(ctx context.Context, channel, targetID, content string) error {
+	return f(ctx, channel, targetID, content)
+}
+
 type SLAConfigService struct {
 	repo       *repository.SLAConfigRepository
 	webhookRepo *repository.WebhookConfigRepository
@@ -115,10 +122,14 @@ func (s *SLAConfigService) FireSLAEvent(ctx context.Context, ticket *model.Ticke
 	// 2. Webhook 推送
 	s.fireWebhooks(ctx, event)
 
-	// 3. 渠道消息（处理人）
+	// 3. 渠道消息（处理人）- use the ticket source channel if available
 	if s.eventHandler != nil && ticket.AssigneeID != nil {
+		channel := ticket.Source
+		if channel == "" || channel == "web" || channel == "api" {
+			channel = "lark"
+		}
 		msg := fmt.Sprintf("⚠️ SLA 告警\n工单：%s\n标题：%s\n状态：%s\n事件：%s", ticket.TicketNo, ticket.Title, ticket.Status, eventType)
-		s.eventHandler.SendToChannel(ctx, "lark", fmt.Sprintf("%d", *ticket.AssigneeID), msg)
+		s.eventHandler.SendToChannel(ctx, channel, fmt.Sprintf("%d", *ticket.AssigneeID), msg)
 	}
 }
 

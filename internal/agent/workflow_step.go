@@ -57,7 +57,7 @@ func (s *WorkflowService) executeHumanStep(ctx context.Context, step *model.Work
 		cfg.TimeoutMinutes = 1440
 	}
 
-	timeoutCtx, timeoutCancel := context.WithTimeout(context.Background(), time.Duration(cfg.TimeoutMinutes)*time.Minute)
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutMinutes)*time.Minute)
 	s.humanStepCancels.Store(step.ID, timeoutCancel)
 
 	go func(stepID uint, cancel context.CancelFunc) {

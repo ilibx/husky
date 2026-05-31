@@ -31,6 +31,7 @@ type TicketOperator interface {
 	AutoAssignTicket(ctx context.Context, id uint) (*uint, error)
 	ClaimTicket(ctx context.Context, id, userID uint) error
 	UpdateStatus(ctx context.Context, id uint, status string) error
+	SetPriority(ctx context.Context, id uint, priority string) error
 	SetDueAt(ctx context.Context, id uint, dueAt time.Time) error
 	ListOverdue(ctx context.Context) ([]model.Ticket, error)
 }

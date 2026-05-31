@@ -19,6 +19,8 @@ type KnowledgeBase struct {
 	TitleZh         string         `gorm:"type:varchar(255)" json:"title_zh,omitempty"`
 	ContentZh       string         `gorm:"type:text" json:"content_zh,omitempty"`
 	Category        string         `gorm:"type:varchar(100)" json:"category"`
+	SourceType      string         `gorm:"type:varchar(50);default:'manual'" json:"source_type"` // manual, word, pdf, epub, markdown, text
+	SourceURL       string         `gorm:"type:text" json:"source_url,omitempty"`                 // storage path or external URL
 	Tags            datatypes.JSON `gorm:"type:jsonb" json:"tags"`
 	Vector          datatypes.JSON `gorm:"type:vector(1536)" json:"-"`
 	ViewCount       int            `gorm:"default:0" json:"view_count"`

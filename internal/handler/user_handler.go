@@ -13,19 +13,16 @@ import (
 	"github.com/husky/husky/pkg/logger"
 )
 
-// UserHandler 用户管理处理器
 type UserHandler struct {
 	userService service.UserService
 	ldapSvc     *ldap.Service
 	log         *logger.Logger
 }
 
-// NewUserHandler 创建用户管理处理器
 func NewUserHandler(userService service.UserService, ldapSvc *ldap.Service, log *logger.Logger) *UserHandler {
 	return &UserHandler{userService: userService, ldapSvc: ldapSvc, log: log}
 }
 
-// ListUsers 获取用户列表（仅管理员）
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	offset, limit, ok := httputil.ParsePagination(c)
 	if !ok {
@@ -34,11 +31,10 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 
 	users, total, err := h.userService.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	// 不返回密码
 	type userVO struct {
 		ID         uint   `json:"id"`
 		Email      string `json:"email"`
@@ -65,25 +61,24 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": list, "total": total})
+	httputil.Success(c, gin.H{"data": list, "total": total})
 }
 
-// GetUser 获取用户详情
 func (h *UserHandler) GetUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid user id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid user id")
 		return
 	}
 
 	user, err := h.userService.GetByID(c.Request.Context(), uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, err.Error()))
+		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"id":         user.ID,
 		"email":      user.Email,
 		"username":   user.Username,
@@ -98,28 +93,27 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	})
 }
 
-// UpdateUser 更新用户资料
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid user id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid user id")
 		return
 	}
 
 	var req model.UpdateUserRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	user, err := h.userService.Update(c.Request.Context(), uint(id), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"id":         user.ID,
 		"username":   user.Username,
 		"avatar":     user.Avatar,
@@ -128,7 +122,6 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	})
 }
 
-// DeleteUser 删除用户
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	currentUserID, _ := c.Get("user_id")
 	uid, _ := currentUserID.(uint)
@@ -136,57 +129,56 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid user id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid user id")
 		return
 	}
 
 	if uint(id) == uid {
-		c.JSON(http.StatusForbidden, errors.NewErrorResponse(errors.ErrForbidden, "cannot delete yourself"))
+		httputil.Error(c, http.StatusForbidden, errors.ErrForbidden, "cannot delete yourself")
 		return
 	}
 
 	if err := h.userService.Delete(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "user deleted"})
+	httputil.Success(c, gin.H{"message": "user deleted"})
 }
 
-// ChangeRole 变更用户角色（仅管理员）
 func (h *UserHandler) ChangeRole(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid user id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid user id")
 		return
 	}
 
 	var req model.ChangeRoleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	if err := h.userService.ChangeRole(c.Request.Context(), uint(id), req.Role); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "role updated"})
+	httputil.Success(c, gin.H{"message": "role updated"})
 }
 
 func (h *UserHandler) SyncLDAPUsers(c *gin.Context) {
 	if h.ldapSvc == nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "LDAP not configured"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "LDAP not configured")
 		return
 	}
 
 	result, err := h.ldapSvc.SyncUsers(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, result)
+	httputil.Success(c, result)
 }

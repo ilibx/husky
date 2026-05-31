@@ -24,7 +24,7 @@ export const useUserStore = defineStore('user', () => {
   }
 
   async function fetchUserInfo() {
-    const res: any = await request.get('/user/info')
+    const res: any = await request.get('/users/me')
     userInfo.value = res.data || res
     return userInfo.value
   }

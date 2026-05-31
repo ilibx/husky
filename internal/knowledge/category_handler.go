@@ -6,26 +6,27 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/pkg/errors"
+	"github.com/husky/husky/pkg/httputil"
 )
 
 func (h *Handler) ListKnowledgeCategories(c *gin.Context) {
 	categories, err := h.knowledgeService.ListCategories(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": categories})
+	httputil.Success(c, gin.H{"data": categories})
 }
 
 func (h *Handler) KnowledgeCategoryTree(c *gin.Context) {
 	tree, err := h.knowledgeService.CategoryTree(c.Request.Context())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": tree})
+	httputil.Success(c, gin.H{"data": tree})
 }
 
 func (h *Handler) Ask(c *gin.Context) {
@@ -33,17 +34,17 @@ func (h *Handler) Ask(c *gin.Context) {
 		Question string `json:"question" binding:"required"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "question is required"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "question is required")
 		return
 	}
 
 	resp, err := h.knowledgeService.Ask(c.Request.Context(), req.Question)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, resp)
+	httputil.Success(c, resp)
 }
 
 func (h *Handler) RecommendKnowledge(c *gin.Context) {
@@ -58,24 +59,24 @@ func (h *Handler) RecommendKnowledge(c *gin.Context) {
 
 	results, err := h.knowledgeService.RecommendKnowledge(c.Request.Context(), limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": results})
+	httputil.Success(c, gin.H{"data": results})
 }
 
 func (h *Handler) RecordKnowledgeView(c *gin.Context) {
 	id := c.Param("id")
 	if id == "" {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "id is required"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "id is required")
 		return
 	}
 
 	if err := h.knowledgeService.RecordView(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"success": true})
+	httputil.Success(c, gin.H{"success": true})
 }

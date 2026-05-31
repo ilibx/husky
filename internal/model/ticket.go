@@ -90,6 +90,7 @@ type Ticket struct {
 	TicketNo    string `gorm:"uniqueIndex;size:50;not null" json:"ticket_no"`
 	Title       string `gorm:"size:255;not null" json:"title"`
 	Description string `gorm:"type:text;not null" json:"description"`
+	Version     int    `gorm:"default:0" json:"version"`
 	Status      string `gorm:"size:50;default:'open'" json:"status"`          // open, in_progress, pending, resolved, closed
 	Priority    string `gorm:"size:20;default:'medium'" json:"priority"`      // low, medium, high, urgent
 	Type        string `gorm:"size:50" json:"type"`                           // incident, service_request, problem, change

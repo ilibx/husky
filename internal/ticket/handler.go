@@ -29,7 +29,7 @@ func NewTicketHandler(ticketService Service, slaConfigSvc *SLAConfigService, log
 func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	var req model.CreateTicketRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
@@ -44,7 +44,7 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 		}
 	} else {
 		if req.RequesterID != "" && req.RequesterID != fmt.Sprintf("%d", uid) {
-			c.JSON(http.StatusForbidden, errors.NewErrorResponse(errors.ErrForbidden, "cannot create ticket for another user"))
+			httputil.Error(c, http.StatusForbidden, errors.ErrForbidden, "cannot create ticket for another user")
 			return
 		}
 		req.RequesterID = fmt.Sprintf("%d", uid)
@@ -52,11 +52,11 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 
 	resp, err := h.ticketService.CreateTicket(c.Request.Context(), &req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, resp)
+	httputil.Created(c, resp)
 }
 
 func (h *TicketHandler) ListTickets(c *gin.Context) {
@@ -86,11 +86,11 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 
 	tickets, total, err := h.ticketService.ListTickets(c.Request.Context(), offset, limit, filters)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"data":  tickets,
 		"total": total,
 		"page":  offset/limit + 1,
@@ -100,23 +100,23 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 func (h *TicketHandler) GetTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
 	ticket, err := h.ticketService.GetTicket(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, "ticket not found"))
+		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, "ticket not found")
 		return
 	}
 
-	c.JSON(http.StatusOK, ticket)
+	httputil.Success(c, ticket)
 }
 
 func (h *TicketHandler) UpdateTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
@@ -127,7 +127,7 @@ func (h *TicketHandler) UpdateTicket(c *gin.Context) {
 		Priority    string `json:"priority,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
@@ -139,22 +139,22 @@ func (h *TicketHandler) UpdateTicket(c *gin.Context) {
 	}
 	ticket.ID = id
 	if err := h.ticketService.UpdateTicket(c.Request.Context(), ticket); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, ticket)
+	httputil.Success(c, ticket)
 }
 
 func (h *TicketHandler) DeleteTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
 	if err := h.ticketService.DeleteTicket(c.Request.Context(), id); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
@@ -164,51 +164,51 @@ func (h *TicketHandler) DeleteTicket(c *gin.Context) {
 func (h *TicketHandler) WatchTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 	userID, _ := c.Get("user_id")
 	if err := h.ticketService.WatchTicket(c.Request.Context(), id, userID.(uint)); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "watching ticket"})
+	httputil.Success(c, gin.H{"message": "watching ticket"})
 }
 
 func (h *TicketHandler) UnwatchTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 	userID, _ := c.Get("user_id")
 	if err := h.ticketService.UnwatchTicket(c.Request.Context(), id, userID.(uint)); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "stopped watching ticket"})
+	httputil.Success(c, gin.H{"message": "stopped watching ticket"})
 }
 
 func (h *TicketHandler) AutoAssignTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
 	agentID, err := h.ticketService.AutoAssignTicket(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ticket auto-assigned", "assignee_id": agentID})
+	httputil.Success(c, gin.H{"message": "ticket auto-assigned", "assignee_id": agentID})
 }
 
 func (h *TicketHandler) AssignTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
@@ -216,38 +216,38 @@ func (h *TicketHandler) AssignTicket(c *gin.Context) {
 		AssigneeID uint `json:"assignee_id"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	if err := h.ticketService.AssignTicket(c.Request.Context(), id, req.AssigneeID); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ticket assigned"})
+	httputil.Success(c, gin.H{"message": "ticket assigned"})
 }
 
 func (h *TicketHandler) ClaimTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
 	userID, _ := c.Get("user_id")
 	uid, ok := userID.(uint)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, errors.NewErrorResponse(errors.ErrUnauthorized, "user not authenticated"))
+		httputil.Error(c, http.StatusUnauthorized, errors.ErrUnauthorized, "user not authenticated")
 		return
 	}
 
 	if err := h.ticketService.ClaimTicket(c.Request.Context(), id, uid); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "ticket claimed"})
+	httputil.Success(c, gin.H{"message": "ticket claimed"})
 }
 
 func (h *TicketHandler) ListAuditLogs(c *gin.Context) {
@@ -260,11 +260,11 @@ func (h *TicketHandler) ListAuditLogs(c *gin.Context) {
 
 	logs, total, err := h.ticketService.ListAuditLogs(c.Request.Context(), resourceType, uint(ticketID), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"data":  logs,
 		"total": total,
 	})

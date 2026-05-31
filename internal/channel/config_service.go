@@ -41,6 +41,24 @@ func (s *configService) Create(ctx context.Context, req *model.CreateChannelConf
 		Enabled: true,
 		Status:  1,
 	}
+	if req.AppID != nil {
+		cfg.AppID = *req.AppID
+	}
+	if req.AppSecret != nil {
+		cfg.AppSecret = *req.AppSecret
+	}
+	if req.AgentID != nil {
+		cfg.AgentID = *req.AgentID
+	}
+	if req.WebhookURL != nil {
+		cfg.WebhookURL = *req.WebhookURL
+	}
+	if req.VerifyToken != nil {
+		cfg.VerifyToken = *req.VerifyToken
+	}
+	if req.EncryptKey != nil {
+		cfg.EncryptKey = *req.EncryptKey
+	}
 
 	if err := s.cfgRepo.Create(ctx, cfg); err != nil {
 		return nil, err
@@ -77,6 +95,24 @@ func (s *configService) Update(ctx context.Context, id uint, req *model.UpdateCh
 	}
 	if req.Status != nil {
 		cfg.Status = *req.Status
+	}
+	if req.AppID != nil {
+		cfg.AppID = *req.AppID
+	}
+	if req.AppSecret != nil {
+		cfg.AppSecret = *req.AppSecret
+	}
+	if req.AgentID != nil {
+		cfg.AgentID = *req.AgentID
+	}
+	if req.WebhookURL != nil {
+		cfg.WebhookURL = *req.WebhookURL
+	}
+	if req.VerifyToken != nil {
+		cfg.VerifyToken = *req.VerifyToken
+	}
+	if req.EncryptKey != nil {
+		cfg.EncryptKey = *req.EncryptKey
 	}
 
 	if err := s.cfgRepo.Update(ctx, cfg); err != nil {

@@ -2,45 +2,31 @@ package main
 
 import (
 	"database/sql"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/husky/husky/internal/config"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	// 从环境变量读取数据库连接信息
-	host := os.Getenv("DB_HOST")
-	if host == "" {
-		host = "localhost"
-	}
+	configPath := flag.String("config", "config.yaml", "Path to config YAML file")
+	flag.Parse()
 
-	port := os.Getenv("DB_PORT")
-	if port == "" {
-		port = "5432"
-	}
-
-	user := os.Getenv("DB_USER")
-	if user == "" {
-		user = "postgres"
-	}
-
-	password := os.Getenv("DB_PASSWORD")
-	if password == "" {
-		password = "postgres"
-	}
-
-	dbname := os.Getenv("DB_NAME")
-	if dbname == "" {
-		dbname = "husky"
+	// 从 YAML 加载配置获取数据库连接信息
+	cfg, err := config.LoadConfig(*configPath)
+	if err != nil {
+		log.Fatalf("Failed to load config: %v", err)
 	}
 
 	// 构建连接字符串
-	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		host, port, user, password, dbname)
+	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		cfg.Database.Host, cfg.Database.Port, cfg.Database.User,
+		cfg.Database.Password, cfg.Database.Name, cfg.Database.SSLMode)
 
 	// 连接数据库
 	db, err := sql.Open("postgres", connStr)

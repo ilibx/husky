@@ -101,6 +101,9 @@ func (s *WorkflowService) ReviseStep(ctx context.Context, stepID, userID uint, f
 			step.WorkflowID, "workflow")
 	}
 
-	go s.executeStep(context.WithoutCancel(ctx), step, nil)
+	wf, _ := s.wfRepo.GetByID(ctx, step.WorkflowID)
+	if wf != nil {
+		go s.executeStep(context.WithoutCancel(ctx), step, wf)
+	}
 	return nil
 }

@@ -34,17 +34,17 @@ func (h *CRUDHandler) CreateAgent(c *gin.Context) {
 
 	var req model.CreateAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	agent, err := h.agentService.Create(c.Request.Context(), userID.(uint), &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, agent)
+	httputil.Created(c, agent)
 }
 
 func (h *CRUDHandler) ListAgents(c *gin.Context) {
@@ -55,66 +55,66 @@ func (h *CRUDHandler) ListAgents(c *gin.Context) {
 
 	list, total, err := h.agentService.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": list, "total": total})
+	httputil.Success(c, gin.H{"data": list, "total": total})
 }
 
 func (h *CRUDHandler) GetAgent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid agent id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid agent id")
 		return
 	}
 
 	agent, err := h.agentService.GetByID(c.Request.Context(), uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, err.Error()))
+		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, agent)
+	httputil.Success(c, agent)
 }
 
 func (h *CRUDHandler) UpdateAgent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid agent id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid agent id")
 		return
 	}
 
 	var req model.UpdateAgentRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	agent, err := h.agentService.Update(c.Request.Context(), uint(id), &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, agent)
+	httputil.Success(c, agent)
 }
 
 func (h *CRUDHandler) DeleteAgent(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid agent id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid agent id")
 		return
 	}
 
 	if err := h.agentService.Delete(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "agent deleted"})
+	httputil.Success(c, gin.H{"message": "agent deleted"})
 }
 

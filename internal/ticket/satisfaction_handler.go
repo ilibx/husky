@@ -5,12 +5,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/pkg/errors"
+	"github.com/husky/husky/pkg/httputil"
 )
 
 func (h *TicketHandler) RateTicket(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
@@ -19,42 +20,42 @@ func (h *TicketHandler) RateTicket(c *gin.Context) {
 		Comment string `json:"comment,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	userID, _ := c.Get("user_id")
 	uid, ok := userID.(uint)
 	if !ok {
-		c.JSON(http.StatusUnauthorized, errors.NewErrorResponse(errors.ErrUnauthorized, "user not authenticated"))
+		httputil.Error(c, http.StatusUnauthorized, errors.ErrUnauthorized, "user not authenticated")
 		return
 	}
 
 	sat, err := h.ticketService.RateTicket(c.Request.Context(), id, uid, req.Score, req.Comment)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, sat)
+	httputil.Created(c, sat)
 }
 
 func (h *TicketHandler) GetSatisfaction(c *gin.Context) {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid ticket id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid ticket id")
 		return
 	}
 
 	sat, err := h.ticketService.GetSatisfaction(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 	if sat == nil {
-		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, "not rated yet"))
+		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, "not rated yet")
 		return
 	}
 
-	c.JSON(http.StatusOK, sat)
+	httputil.Success(c, sat)
 }

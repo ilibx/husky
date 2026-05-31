@@ -4,83 +4,65 @@ import (
 	"embed"
 	"io/fs"
 	"net/http"
-	"net/http/httputil"
-	"net/url"
+	"path"
 	"strings"
+
+	"github.com/gin-gonic/gin"
 )
 
 //go:embed static/*
 var staticFiles embed.FS
 
 type Option struct {
-	Mode string // "embedded" or "external"
-	URL  string // external URL for "external" mode, e.g. http://localhost:5173
+	BasePath string
 }
 
-// NewHandler returns an HTTP handler for the admin UI.
-//
-// Modes:
-//
-//	embedded (default) — serve SPA from embedded static files
-//	external          — reverse-proxy to an external dev server (e.g. Vite dev)
-func NewHandler(opt Option) http.Handler {
-	if opt.Mode == "" {
-		opt.Mode = "embedded"
-	}
-
-	switch opt.Mode {
-	case "external":
-		return newProxyHandler(opt.URL)
-	default:
-		return newEmbeddedHandler()
-	}
-}
-
-func newEmbeddedHandler() http.Handler {
+func NewHandler(opt Option) gin.HandlerFunc {
 	sub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		panic("failed to load admin static files: " + err.Error())
 	}
-	fileServer := http.FileServer(http.FS(sub))
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path := strings.TrimPrefix(r.URL.Path, "/admin")
-		path = strings.TrimPrefix(path, "/")
+	return func(c *gin.Context) {
+		p := c.Param("path")
 
-		if path == "" {
-			path = "index.html"
-		} else {
-			if !strings.Contains(path, ".") {
-				path = "index.html"
-			}
+		// NoRoute 没有 *path 参数，从 URL 里取
+		if p == "" {
+			p = strings.TrimPrefix(c.Request.URL.Path, opt.BasePath)
+		}
+		p = strings.TrimPrefix(p, "/")
+
+		if p == "" || !strings.Contains(p, ".") {
+			p = "index.html"
 		}
 
-		r.URL.Path = "/" + path
-		fileServer.ServeHTTP(w, r)
-	})
-}
+		data, err := fs.ReadFile(sub, p)
+		if err != nil {
+			c.String(http.StatusNotFound, "404 page not found")
+			return
+		}
 
-func newProxyHandler(targetURL string) http.Handler {
-	if targetURL == "" {
-		targetURL = "http://localhost:5173"
+		switch path.Ext(p) {
+		case ".css":
+			c.Data(http.StatusOK, "text/css; charset=utf-8", data)
+		case ".js":
+			c.Data(http.StatusOK, "application/javascript", data)
+		case ".html":
+			c.Data(http.StatusOK, "text/html; charset=utf-8", data)
+		case ".png":
+			c.Data(http.StatusOK, "image/png", data)
+		case ".jpg", ".jpeg":
+			c.Data(http.StatusOK, "image/jpeg", data)
+		case ".svg":
+			c.Data(http.StatusOK, "image/svg+xml", data)
+		case ".ico":
+			c.Data(http.StatusOK, "image/x-icon", data)
+		case ".woff2":
+			c.Data(http.StatusOK, "font/woff2", data)
+		case ".woff":
+			c.Data(http.StatusOK, "font/woff", data)
+		default:
+			c.Data(http.StatusOK, "text/plain; charset=utf-8", data)
+		}
 	}
-
-	target, err := url.Parse(targetURL)
-	if err != nil {
-		panic("invalid admin external URL: " + err.Error())
-	}
-
-	proxy := httputil.NewSingleHostReverseProxy(target)
-
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Host = target.Host
-		r.URL.Scheme = target.Scheme
-		r.Host = target.Host
-		proxy.ServeHTTP(w, r)
-	})
-}
-
-// Handler returns an embedded-only handler (kept for backward compatibility).
-func Handler() http.Handler {
-	return newEmbeddedHandler()
 }

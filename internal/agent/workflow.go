@@ -187,13 +187,13 @@ func (s *WorkflowService) OnUserMessage(ctx context.Context, ticketID uint, mess
 	for _, step := range wf.Steps {
 		if step.Status == "running" && step.Type == "react" {
 			key := fmt.Sprintf("react-%d", step.ID)
-			ch, loaded := s.workflowMu.LoadOrStore(key, make(chan string, 16))
+			ch, loaded := s.workflowMu.LoadOrStore(key, make(chan string, 64))
 			msgCh := ch.(chan string)
 			if loaded {
 				select {
 				case msgCh <- message:
 				default:
-					log.Printf("ReAct message queue full for step %d, dropping message", step.ID)
+					log.Printf("ReAct message queue full for step %d, message dropped", step.ID)
 				}
 				return
 			}

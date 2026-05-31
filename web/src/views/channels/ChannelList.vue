@@ -13,11 +13,19 @@ interface Channel {
   created_at: string
 }
 
+interface BotConfig {
+  channel: string
+  welcome_msg: string
+  signature: string
+  enabled: number
+}
+
 const channels = ref<Channel[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const formTitle = ref('新增通道')
 const form = ref<Channel>({ id: 0, name: '', type: 'lark', config: '', enabled: 1, status: '', created_at: '' })
+const botForm = ref<BotConfig>({ channel: '', welcome_msg: '', signature: '', enabled: 1 })
 
 async function fetchData() {
   loading.value = true
@@ -31,15 +39,26 @@ async function fetchData() {
   }
 }
 
-function openAdd() {
+async function openAdd() {
   formTitle.value = '新增通道'
   form.value = { id: 0, name: '', type: 'lark', config: '', enabled: 1, status: '', created_at: '' }
+  botForm.value = { channel: 'lark', welcome_msg: '', signature: '', enabled: 1 }
   dialogVisible.value = true
 }
 
-function openEdit(row: Channel) {
+async function openEdit(row: Channel) {
   formTitle.value = '编辑通道'
   form.value = { ...row }
+  botForm.value = { channel: row.type, welcome_msg: '', signature: '', enabled: 1 }
+  // Load existing bot config if any
+  try {
+    const res: any = await request.get(`/bot-config/${row.type}`)
+    if (res.data) {
+      botForm.value = res.data
+    }
+  } catch {
+    // use defaults
+  }
   dialogVisible.value = true
 }
 
@@ -48,11 +67,13 @@ async function handleSave() {
     const payload = { name: form.value.name, type: form.value.type, config: form.value.config, enabled: form.value.enabled }
     if (form.value.id) {
       await request.put(`/channels/${form.value.id}`, payload)
-      ElMessage.success('更新成功')
     } else {
       await request.post('/channels', payload)
-      ElMessage.success('创建成功')
     }
+    // Save bot config
+    botForm.value.channel = form.value.type
+    await request.post('/bot-config', botForm.value)
+    ElMessage.success('保存成功')
     dialogVisible.value = false
     fetchData()
   } catch {
@@ -87,8 +108,8 @@ onMounted(fetchData)
 <template>
   <div>
     <div class="page-header">
-      <h2>通道管理</h2>
-      <el-button type="primary" @click="openAdd">新增通道</el-button>
+      <h2>渠道配置</h2>
+      <el-button type="primary" @click="openAdd">新增渠道</el-button>
     </div>
 
     <el-card>
@@ -116,8 +137,8 @@ onMounted(fetchData)
       </el-table>
     </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="formTitle" width="500px">
-      <el-form :model="form" label-width="80px">
+    <el-dialog v-model="dialogVisible" :title="formTitle" width="600px">
+      <el-form :model="form" label-width="100px">
         <el-form-item label="名称">
           <el-input v-model="form.name" />
         </el-form-item>
@@ -129,10 +150,22 @@ onMounted(fetchData)
           </el-select>
         </el-form-item>
         <el-form-item label="配置">
-          <el-input v-model="form.config" type="textarea" :rows="6" placeholder="JSON 格式配置" />
+          <el-input v-model="form.config" type="textarea" :rows="4" placeholder="JSON 格式配置（可选）" />
+        </el-form-item>
+        <el-divider>机器人设置</el-divider>
+        <el-form-item label="欢迎消息">
+          <el-input v-model="botForm.welcome_msg" type="textarea" :rows="3" placeholder="新工单创建时自动发送的欢迎消息" />
+        </el-form-item>
+        <el-form-item label="签名">
+          <el-input v-model="botForm.signature" type="textarea" :rows="2" placeholder="消息末尾自动附加的签名" />
         </el-form-item>
         <el-form-item label="启用">
-          <el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" />
+          <div class="switch-group">
+            <span>渠道：</span>
+            <el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" />
+            <span style="margin-left: 16px;">机器人：</span>
+            <el-switch v-model="botForm.enabled" :active-value="1" :inactive-value="0" />
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -152,5 +185,9 @@ onMounted(fetchData)
 }
 .page-header h2 {
   margin: 0;
+}
+.switch-group {
+  display: flex;
+  align-items: center;
 }
 </style>

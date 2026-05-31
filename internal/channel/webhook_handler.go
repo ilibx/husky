@@ -11,6 +11,7 @@ import (
 	"github.com/husky/husky/internal/gateway"
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/pkg/errors"
+	"github.com/husky/husky/pkg/httputil"
 )
 
 func (h *Handler) LarkWebhook(c *gin.Context) {
@@ -19,7 +20,7 @@ func (h *Handler) LarkWebhook(c *gin.Context) {
 	var event model.LarkWebhookEvent
 	if err := json.Unmarshal(rawBody, &event); err != nil {
 		h.log.Error("Failed to parse Lark webhook", "error", err)
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid request body"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid request body")
 		return
 	}
 
@@ -31,7 +32,7 @@ func (h *Handler) LarkWebhook(c *gin.Context) {
 
 	if event.Header == nil || event.Header.EventType == "" {
 		h.log.Warn("Received Lark webhook without header")
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "missing event header"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "missing event header")
 		return
 	}
 
@@ -43,7 +44,7 @@ func (h *Handler) LarkWebhook(c *gin.Context) {
 
 	if event.Event == nil {
 		h.log.Warn("Lark event has no data")
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "missing event data"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "missing event data")
 		return
 	}
 
@@ -81,7 +82,7 @@ func (h *Handler) LarkWebhook(c *gin.Context) {
 	ticket, err := h.gw.HandleIncoming(c.Request.Context(), msg)
 	if err != nil {
 		h.log.Error("Failed to create ticket from Lark message", "error", err)
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, "failed to create ticket"))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, "failed to create ticket")
 		return
 	}
 
@@ -104,14 +105,14 @@ func (h *Handler) DingTalkWebhook(c *gin.Context) {
 	var event model.DingTalkWebhookEvent
 	if err := json.Unmarshal(rawBody, &event); err != nil {
 		h.log.Error("Failed to parse DingTalk webhook", "error", err)
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid request body"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid request body")
 		return
 	}
 
 	h.log.Info("Received DingTalk webhook", "msg_type", event.MsgType, "sender", event.SenderNick)
 
 	if event.MsgType != "text" || event.Text == nil || strings.TrimSpace(event.Text.Content) == "" {
-		c.JSON(http.StatusOK, gin.H{"success": true})
+		httputil.Success(c, gin.H{"success": true})
 		return
 	}
 
@@ -131,18 +132,18 @@ func (h *Handler) DingTalkWebhook(c *gin.Context) {
 	ticket, err := h.gw.HandleIncoming(c.Request.Context(), msg)
 	if err != nil {
 		h.log.Error("Failed to create ticket from DingTalk message", "error", err)
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, "failed to create ticket"))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, "failed to create ticket")
 		return
 	}
 
 	if ticket == nil {
-		c.JSON(http.StatusOK, gin.H{"success": true, "bot_reply": true})
+		httputil.Success(c, gin.H{"success": true, "bot_reply": true})
 		return
 	}
 
 	h.saveWebhookRecord(c, "dingtalk", msg, &ticket.ID)
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"success":   true,
 		"ticket_id": ticket.ID,
 		"message":   "Ticket created",
@@ -155,14 +156,14 @@ func (h *Handler) WeComWebhook(c *gin.Context) {
 	var event model.WeComWebhookEvent
 	if err := json.Unmarshal(rawBody, &event); err != nil {
 		h.log.Error("Failed to parse WeCom webhook", "error", err)
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid request body"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid request body")
 		return
 	}
 
 	h.log.Info("Received WeCom webhook", "msg_type", event.MsgType, "from", event.FromUserName)
 
 	if event.MsgType != "text" || event.Text == nil || strings.TrimSpace(event.Text.Content) == "" {
-		c.JSON(http.StatusOK, gin.H{"success": true})
+		httputil.Success(c, gin.H{"success": true})
 		return
 	}
 
@@ -181,18 +182,18 @@ func (h *Handler) WeComWebhook(c *gin.Context) {
 	ticket, err := h.gw.HandleIncoming(c.Request.Context(), msg)
 	if err != nil {
 		h.log.Error("Failed to create ticket from WeCom message", "error", err)
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, "failed to create ticket"))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, "failed to create ticket")
 		return
 	}
 
 	if ticket == nil {
-		c.JSON(http.StatusOK, gin.H{"success": true, "bot_reply": true})
+		httputil.Success(c, gin.H{"success": true, "bot_reply": true})
 		return
 	}
 
 	h.saveWebhookRecord(c, "wecom", msg, &ticket.ID)
 
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"success":   true,
 		"ticket_id": ticket.ID,
 		"message":   "Ticket created",

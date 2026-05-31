@@ -11,7 +11,11 @@ func (g *Gateway) tryBotAnswer(ctx context.Context, msg *IncomingMessage) bool {
 		return false
 	}
 	answer, err := g.bot.Ask(ctx, msg.Content)
-	if err != nil || answer == nil || answer.Answer == "" || answer.Answer == "未找到相关知识" {
+	if err != nil {
+		g.log.Warn("Gateway: bot Ask failed, creating ticket", "error", err)
+		return false
+	}
+	if answer == nil || answer.Answer == "" || answer.Answer == "未找到相关知识" {
 		return false
 	}
 	out := &OutboundMessage{

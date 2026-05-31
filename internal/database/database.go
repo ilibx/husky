@@ -86,6 +86,8 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.TicketField{},
 		&model.TicketFieldValue{},
 		&model.BotConfig{},
+		&model.SystemConfig{},
+		&model.Menu{},
 	)
 
 	if err != nil {

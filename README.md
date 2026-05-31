@@ -143,17 +143,26 @@ go run cmd/api/main.go
 # 健康检查:   http://localhost:8080/health
 ```
 
+### 默认管理员账号
+
+首次启动时自动创建默认管理员（仅当数据库无 admin 用户时）：
+
+| 字段 | 值 |
+|------|-----|
+| 邮箱 | `admin@husky.local` |
+| 密码 | `admin123` |
+| 角色 | `admin` |
+
+> ⚠️ 生产环境请立即修改密码！
+
 ### Admin UI 部署模式
 
 ```bash
 # 模式一：嵌入式（默认）— SPA 内嵌到 Go 二进制，无需额外部署
-ADMIN_MODE=embedded go run ./cmd/api
-
-# 模式二：外部部署（开发用）— 反向代理到前端 dev server
-ADMIN_MODE=external ADMIN_URL=http://localhost:5173 go run ./cmd/api
+go run ./cmd/api --config config.yaml
 
 # 构建嵌入式部署二进制
-make build          # 先 web-build，再 go build
+make build
 ```
 
 ### 使用 Makefile

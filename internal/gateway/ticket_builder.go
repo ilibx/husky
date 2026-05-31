@@ -3,6 +3,7 @@ package gateway
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	"github.com/husky/husky/internal/intent"
 	"github.com/husky/husky/internal/model"
@@ -25,7 +26,21 @@ func (g *Gateway) enrichUser(ctx context.Context, msg *IncomingMessage) error {
 	return nil
 }
 
-func (g *Gateway) buildTicketRequest(msg *IncomingMessage) *model.CreateTicketRequest {
+func (g *Gateway) resolveRequesterID(ctx context.Context, msg *IncomingMessage) string {
+	if msg.User != nil && msg.User.Email != "" && g.userLookup != nil {
+		user, err := g.userLookup.GetByEmail(ctx, msg.User.Email)
+		if err == nil && user != nil {
+			return strconv.FormatUint(uint64(user.ID), 10)
+		}
+	}
+	_, err := strconv.ParseUint(msg.UserID, 10, 64)
+	if err == nil {
+		return msg.UserID
+	}
+	return ""
+}
+
+func (g *Gateway) buildTicketRequest(ctx context.Context, msg *IncomingMessage) *model.CreateTicketRequest {
 	prefix := string(msg.Channel)
 	title := fmt.Sprintf("%s ticket - %s", prefix, truncateString(msg.Content, 50))
 
@@ -62,7 +77,7 @@ func (g *Gateway) buildTicketRequest(msg *IncomingMessage) *model.CreateTicketRe
 		Title:       title,
 		Description: msg.Content,
 		Priority:    "medium",
-		RequesterID: msg.UserID,
+		RequesterID: g.resolveRequesterID(ctx, msg),
 		Channel:     string(msg.Channel),
 		Metadata:    metadata,
 	}
@@ -84,7 +99,7 @@ func (g *Gateway) createTicketFromIntent(ctx context.Context, msg *IncomingMessa
 		Title:       title,
 		Description: msg.Content,
 		Priority:    priority,
-		RequesterID: msg.UserID,
+		RequesterID: g.resolveRequesterID(ctx, msg),
 		Channel:     string(msg.Channel),
 		Metadata: map[string]interface{}{
 			"channel":           string(msg.Channel),

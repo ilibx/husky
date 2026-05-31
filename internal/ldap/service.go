@@ -35,16 +35,16 @@ func NewService(cfg *config.Config, userRepo *repository.UserRepository, log *lo
 
 func (s *Service) SyncUsers(ctx context.Context) (*SyncResult, error) {
 	cfg := s.cfg
-	if cfg.LDAPHost == "" {
-		return nil, fmt.Errorf("LDAP not configured: LDAP_HOST is empty")
+	if !cfg.LDAP.Enable {
+		return nil, fmt.Errorf("LDAP not configured")
 	}
 
 	var fieldMap map[string]string
-	if err := json.Unmarshal([]byte(cfg.LDAPFieldMap), &fieldMap); err != nil {
+	if err := json.Unmarshal([]byte(cfg.LDAP.FieldMap), &fieldMap); err != nil {
 		return nil, fmt.Errorf("invalid LDAP_FIELD_MAP: %w", err)
 	}
 
-	conn, err := ldapv3.Dial("tcp", fmt.Sprintf("%s:%d", cfg.LDAPHost, cfg.LDAPPort))
+	conn, err := ldapv3.Dial("tcp", fmt.Sprintf("%s:%d", cfg.LDAP.Host, cfg.LDAP.Port))
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to LDAP server: %w", err)
 	}
@@ -58,18 +58,18 @@ func (s *Service) SyncUsers(ctx context.Context) (*SyncResult, error) {
 		s.log.Warn("LDAP STARTTLS failed, trying plain connection", "error", err)
 	}
 
-	if cfg.LDAPBindDN != "" {
-		if err := conn.Bind(cfg.LDAPBindDN, cfg.LDAPPassword); err != nil {
+	if cfg.LDAP.BindDN != "" {
+		if err := conn.Bind(cfg.LDAP.BindDN, cfg.LDAP.Password); err != nil {
 			return nil, fmt.Errorf("LDAP bind failed: %w", err)
 		}
 	}
 
 	searchReq := ldapv3.NewSearchRequest(
-		cfg.LDAPBaseDN,
+		cfg.LDAP.BaseDN,
 		ldapv3.ScopeWholeSubtree,
 		ldapv3.NeverDerefAliases,
 		0, 0, false,
-		cfg.LDAPFilter,
+		cfg.LDAP.Filter,
 		[]string{}, // all attributes
 		nil,
 	)

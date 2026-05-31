@@ -66,6 +66,8 @@ func (s *service) CreateTicket(ctx context.Context, req *model.CreateTicketReque
 	if req.RequesterID != "" {
 		if id, err := strconv.ParseUint(req.RequesterID, 10, 64); err == nil {
 			ticket.RequesterID = uint(id)
+		} else {
+			log.Printf("CreateTicket: non-numeric RequesterID %q, storing in metadata", req.RequesterID)
 		}
 	}
 
@@ -120,21 +122,28 @@ func (s *service) UpdateTicket(ctx context.Context, ticket *model.Ticket) error 
 	return s.ticketRepo.Update(ctx, ticket)
 }
 
+func (s *service) SetPriority(ctx context.Context, id uint, priority string) error {
+	if !model.IsValidPriority(priority) {
+		return fmt.Errorf("invalid priority: %s", priority)
+	}
+	ticket, err := s.ticketRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	oldPriority := ticket.Priority
+	ticket.Priority = priority
+	if err := s.ticketRepo.Update(ctx, ticket); err != nil {
+		return err
+	}
+	s.logAudit(ctx, 0, "update_priority", "ticket", ticket.ID,
+		map[string]string{"priority": oldPriority},
+		map[string]string{"priority": priority})
+	return nil
+}
+
 func (s *service) DeleteTicket(ctx context.Context, id uint) error {
 	return s.ticketRepo.Delete(ctx, id)
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 func (s *service) logAudit(ctx context.Context, userID uint, action, resource string, resourceID uint, oldVal, newVal interface{}) {
 	oldJSON, err := json.Marshal(oldVal)
@@ -157,6 +166,3 @@ func (s *service) logAudit(ctx context.Context, userID uint, action, resource st
 		log.Printf("logAudit: failed to create audit log: %v", err)
 	}
 }
-
-
-

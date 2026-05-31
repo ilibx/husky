@@ -17,17 +17,17 @@ func (h *CRUDHandler) CreateSOP(c *gin.Context) {
 
 	var req model.CreateSOPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	sop, err := h.sopService.Create(c.Request.Context(), userID.(uint), &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusCreated, sop)
+	httputil.Created(c, sop)
 }
 
 func (h *CRUDHandler) ListSOPs(c *gin.Context) {
@@ -38,65 +38,65 @@ func (h *CRUDHandler) ListSOPs(c *gin.Context) {
 
 	list, total, err := h.sopService.List(c.Request.Context(), offset, limit)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": list, "total": total})
+	httputil.Success(c, gin.H{"data": list, "total": total})
 }
 
 func (h *CRUDHandler) GetSOP(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid sop id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid sop id")
 		return
 	}
 
 	sop, err := h.sopService.GetByID(c.Request.Context(), uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, errors.NewErrorResponse(errors.ErrNotFound, err.Error()))
+		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, sop)
+	httputil.Success(c, sop)
 }
 
 func (h *CRUDHandler) UpdateSOP(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid sop id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid sop id")
 		return
 	}
 
 	var req model.UpdateSOPRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
 	sop, err := h.sopService.Update(c.Request.Context(), uint(id), &req)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, err.Error()))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, sop)
+	httputil.Success(c, sop)
 }
 
 func (h *CRUDHandler) DeleteSOP(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "invalid sop id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid sop id")
 		return
 	}
 
 	if err := h.sopService.Delete(c.Request.Context(), uint(id)); err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "sop deleted"})
+	httputil.Success(c, gin.H{"message": "sop deleted"})
 }

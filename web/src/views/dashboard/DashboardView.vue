@@ -13,10 +13,10 @@ const stats = ref<Stats>({ userCount: 0, ticketCount: 0, sopCount: 0, todayActiv
 
 onMounted(async () => {
   try {
-    const res: any = await request.get('/dashboard/stats')
+    const res: any = await request.get('/stats/overview')
     stats.value = res.data || res
   } catch {
-    stats.value = { userCount: 128, ticketCount: 56, sopCount: 8, todayActive: 23 }
+    // API not available, show zeros
   }
 })
 </script>

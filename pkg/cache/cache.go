@@ -67,22 +67,26 @@ func (c *NoopCache) TTL(ctx context.Context, key string) (time.Duration, error) 
 	return 0, nil
 }
 
-// NewRedis 创建 Redis 连接
+// NewRedis 创建 Redis 连接，非必需，host 为空时直接返回 nil
 func NewRedis(cfg *config.Config) (*redis.Client, error) {
+	if !cfg.Cache.Enable {
+		return nil, nil
+	}
+
 	client := redis.NewClient(&redis.Options{
-		Addr:         fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort),
-		Password:     cfg.RedisPassword,
-		DB:           cfg.RedisDB,
-		PoolSize:     cfg.RedisPoolSize,
-		MinIdleConns: cfg.RedisMinIdleConns,
+		Addr:         fmt.Sprintf("%s:%s", cfg.Cache.Host, cfg.Cache.Port),
+		Password:     cfg.Cache.Password,
+		DB:           cfg.Cache.DB,
+		PoolSize:     cfg.Cache.PoolSize,
+		MinIdleConns: cfg.Cache.MinIdleConns,
 	})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := client.Ping(ctx).Result()
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect redis: %w", err)
+	if _, err := client.Ping(ctx).Result(); err != nil {
+		client.Close()
+		return nil, nil
 	}
 
 	return client, nil

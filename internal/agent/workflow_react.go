@@ -182,12 +182,18 @@ func (s *WorkflowService) executeUpdateTicket(ctx context.Context, ticket *model
 	var changes []string
 	if update.Status != "" && model.IsValidTransition(model.TicketStatus(ticket.Status), model.TicketStatus(update.Status)) {
 		ticket.Status = update.Status
-		s.ticketRepo.Update(ctx, ticket)
+		if err := s.ticketRepo.Update(ctx, ticket); err != nil {
+			log.Printf("executeUpdateTicket: failed to update status: %v", err)
+			return "update conflict, retrying"
+		}
 		changes = append(changes, "status="+update.Status)
 	}
 	if update.Priority != "" && model.IsValidPriority(update.Priority) {
 		ticket.Priority = update.Priority
-		s.ticketRepo.Update(ctx, ticket)
+		if err := s.ticketRepo.Update(ctx, ticket); err != nil {
+			log.Printf("executeUpdateTicket: failed to update priority: %v", err)
+			return "update conflict, retrying"
+		}
 		changes = append(changes, "priority="+update.Priority)
 	}
 	if len(changes) > 0 {
@@ -255,16 +261,27 @@ func agentCapabilityScore(model string, maxTokens int) int {
 }
 
 func (s *WorkflowService) reActLoopWithQueue(ctx context.Context, step *model.WorkflowStep, ticket *model.Ticket, wf *model.Workflow, msgCh chan string) {
+	var messages []string
 	for {
 		select {
 		case msg, ok := <-msgCh:
 			if !ok {
 				return
 			}
-			step.Result += fmt.Sprintf("\n[User]: %s", msg)
-			s.wfRepo.UpdateStep(ctx, step)
-			s.reActLoop(ctx, step, ticket, wf)
+			messages = append(messages, msg)
+			if len(messages) >= 16 {
+				step.Result += fmt.Sprintf("\n[User]: %s", messages[0])
+				s.wfRepo.UpdateStep(ctx, step)
+				s.reActLoop(ctx, step, ticket, wf)
+				messages = nil
+			}
 		default:
+			if len(messages) > 0 {
+				step.Result += fmt.Sprintf("\n[User]: %s", messages[0])
+				s.wfRepo.UpdateStep(ctx, step)
+				s.reActLoop(ctx, step, ticket, wf)
+				messages = nil
+			}
 			return
 		}
 	}

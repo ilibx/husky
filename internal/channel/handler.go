@@ -38,12 +38,12 @@ func (h *Handler) JoinGroup(c *gin.Context) {
 	userID := c.Query("user_id")
 
 	if ticketIDStr == "" || userID == "" {
-		c.JSON(http.StatusBadRequest, errors.NewErrorResponse(errors.ErrInvalidParams, "missing ticket_id or user_id"))
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "missing ticket_id or user_id")
 		return
 	}
 
 	h.log.Info("Join group request", "ticket_id", ticketIDStr, "user_id", userID)
-	c.JSON(http.StatusOK, gin.H{
+	httputil.Success(c, gin.H{
 		"success": true,
 		"message": "joined ticket group",
 	})
@@ -58,11 +58,11 @@ func (h *Handler) ListWebhookMessages(c *gin.Context) {
 
 	list, total, err := h.querySvc.ListWebhookMessages(c.Request.Context(), offset, limit, channel)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, errors.NewErrorResponse(errors.ErrInternal, err.Error()))
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": list, "total": total})
+	httputil.Success(c, gin.H{"data": list, "total": total})
 }
 
 func (h *Handler) saveWebhookRecord(c *gin.Context, channel string, msg *gateway.IncomingMessage, ticketID *uint) {
