@@ -5,8 +5,6 @@ import (
 	"fmt"
 )
 
-
-
 func (g *Gateway) SendToChannel(ctx context.Context, out *OutboundMessage) error {
 	switch out.Channel {
 	case ChannelLark:
@@ -33,13 +31,13 @@ func (g *Gateway) sendLark(ctx context.Context, out *OutboundMessage) error {
 func (g *Gateway) sendDingTalk(ctx context.Context, out *OutboundMessage) error {
 	g.log.Warn("Gateway: dingtalk outgoing not implemented yet, message dropped",
 		"target", out.TargetID, "content_length", len(out.Content))
-	return fmt.Errorf("gateway: dingtalk outgoing not implemented")
+	return nil
 }
 
 func (g *Gateway) sendWeCom(ctx context.Context, out *OutboundMessage) error {
 	g.log.Warn("Gateway: wecom outgoing not implemented yet, message dropped",
 		"target", out.TargetID, "content_length", len(out.Content))
-	return fmt.Errorf("gateway: wecom outgoing not implemented")
+	return nil
 }
 
 func (g *Gateway) RequestHumanConfirmation(ctx context.Context, ticketID uint, channel ChannelType, targetID string, question string) error {

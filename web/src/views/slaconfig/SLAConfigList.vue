@@ -11,6 +11,7 @@ interface SLAConfig {
   response_minutes: number
   resolution_minutes: number
   warning_threshold: number
+  warning_level: string
   enabled: boolean
   created_at: string
 }
@@ -35,17 +36,26 @@ const form = ref<SLAConfig>({
   response_minutes: 60,
   resolution_minutes: 480,
   warning_threshold: 0.8,
+  warning_level: 'warning',
   enabled: true,
   created_at: '',
 })
 
 const categories = ref<Category[]>([])
+const levelOptions = ref<{ name: string; key: string; color: string }[]>([])
+
+async function fetchLevels() {
+  try {
+    const res: any = await request.get('/system-config/lookup', { params: { category: 'push', key: 'levels' } })
+    if (res.data?.value) levelOptions.value = JSON.parse(res.data.value)
+  } catch { levelOptions.value = [] }
+}
 
 async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/sla-configs', { params: { page: page.value, page_size: pageSize.value } })
-    slas.value = res.data?.list || res.data || []
+    slas.value = res.data?.data || res.data || []
     total.value = res.data?.total || res.total || 0
   } catch {
     slas.value = []
@@ -57,7 +67,7 @@ async function fetchData() {
 async function fetchCategories() {
   try {
     const res: any = await request.get('/categories')
-    categories.value = res.data?.list || res.data || []
+    categories.value = res.data?.data || res.data || []
   } catch {
     categories.value = []
   }
@@ -72,6 +82,7 @@ function openAdd() {
     response_minutes: 60,
     resolution_minutes: 480,
     warning_threshold: 0.8,
+    warning_level: 'warning',
     enabled: true,
     created_at: '',
   }
@@ -87,6 +98,7 @@ function openEdit(row: SLAConfig) {
     response_minutes: row.response_minutes,
     resolution_minutes: row.resolution_minutes,
     warning_threshold: row.warning_threshold,
+    warning_level: row.warning_level,
     enabled: row.enabled,
     created_at: row.created_at,
   }
@@ -133,13 +145,14 @@ function priorityLabel(priority: string): string {
 onMounted(() => {
   fetchData()
   fetchCategories()
+  fetchLevels()
 })
 </script>
 
 <template>
   <div>
     <div class="page-header">
-      <h2>SLA配置管理</h2>
+      <h2>SLA 配置</h2>
       <el-button type="primary" @click="openAdd">新增SLA配置</el-button>
     </div>
 
@@ -161,6 +174,13 @@ onMounted(() => {
         <el-table-column prop="warning_threshold" label="预警阈值" width="100">
           <template #default="{ row }">
             {{ (row.warning_threshold * 100).toFixed(0) }}%
+          </template>
+        </el-table-column>
+        <el-table-column prop="warning_level" label="预警等级" width="100">
+          <template #default="{ row }">
+            <el-tag v-if="row.warning_level" :color="levelOptions.find(l => l.key === row.warning_level)?.color || '#909399'" style="color:#fff" size="small">
+              {{ levelOptions.find(l => l.key === row.warning_level)?.name || row.warning_level }}
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="enabled" label="启用" width="80">
@@ -210,7 +230,17 @@ onMounted(() => {
           <el-input-number v-model="form.resolution_minutes" :min="1" />
         </el-form-item>
         <el-form-item label="预警阈值">
-          <el-input-number v-model="form.warning_threshold" :min="0.1" :max="1" :step="0.1" />
+          <div class="threshold-wrap">
+            <el-slider v-model="form.warning_threshold" :min="0.1" :max="1" :step="0.05" style="width:200px" />
+            <span class="threshold-value">{{ (form.warning_threshold * 100).toFixed(0) }}%</span>
+          </div>
+          <div class="form-help">当 SLA 时间消耗达到该百分比时触发预警推送</div>
+        </el-form-item>
+        <el-form-item label="预警等级">
+          <el-select v-model="form.warning_level" style="width:200px">
+            <el-option v-for="l in levelOptions" :key="l.key" :label="l.name" :value="l.key" />
+          </el-select>
+          <div class="form-help">推送管理中将按此等级匹配对应的推送方式。在"通知管理→等级管理"中配置</div>
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="form.enabled" />
@@ -238,5 +268,19 @@ onMounted(() => {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+.threshold-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.threshold-value {
+  font-weight: 600;
+  min-width: 40px;
+}
+.form-help {
+  font-size: 12px;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 4px;
 }
 </style>

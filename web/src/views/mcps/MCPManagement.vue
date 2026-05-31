@@ -35,8 +35,8 @@ async function fetchData() {
     const params: any = { page: page.value, page_size: pageSize.value }
     if (keyword.value) params.keyword = keyword.value
     const res: any = await request.get('/mcps', { params })
-    list.value = res.data?.list || res.data || []
-    total.value = res.data?.total || res.total || 0
+    list.value = res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch {
     list.value = []
   } finally {
@@ -90,7 +90,7 @@ onMounted(fetchData)
 <template>
   <div>
     <div class="page-header">
-      <h2>MCP 服务管理</h2>
+      <h2>MCP 服务</h2>
       <el-button type="primary" @click="openAdd">新增 MCP 服务</el-button>
     </div>
 

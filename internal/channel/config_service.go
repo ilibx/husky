@@ -11,7 +11,7 @@ import (
 type ConfigService interface {
 	Create(ctx context.Context, req *model.CreateChannelConfigRequest) (*model.ChannelConfig, error)
 	GetByID(ctx context.Context, id uint) (*model.ChannelConfig, error)
-	List(ctx context.Context) ([]model.ChannelConfig, error)
+	List(ctx context.Context, keyword string) ([]model.ChannelConfig, error)
 	Update(ctx context.Context, id uint, req *model.UpdateChannelConfigRequest) (*model.ChannelConfig, error)
 	Delete(ctx context.Context, id uint) error
 }
@@ -59,6 +59,15 @@ func (s *configService) Create(ctx context.Context, req *model.CreateChannelConf
 	if req.EncryptKey != nil {
 		cfg.EncryptKey = *req.EncryptKey
 	}
+	if req.WelcomeMsg != nil {
+		cfg.WelcomeMsg = *req.WelcomeMsg
+	}
+	if req.Signature != nil {
+		cfg.Signature = *req.Signature
+	}
+	if req.CategoryID != nil {
+		cfg.CategoryID = req.CategoryID
+	}
 
 	if err := s.cfgRepo.Create(ctx, cfg); err != nil {
 		return nil, err
@@ -74,8 +83,8 @@ func (s *configService) GetByID(ctx context.Context, id uint) (*model.ChannelCon
 	return cfg, nil
 }
 
-func (s *configService) List(ctx context.Context) ([]model.ChannelConfig, error) {
-	return s.cfgRepo.List(ctx)
+func (s *configService) List(ctx context.Context, keyword string) ([]model.ChannelConfig, error) {
+	return s.cfgRepo.List(ctx, keyword)
 }
 
 func (s *configService) Update(ctx context.Context, id uint, req *model.UpdateChannelConfigRequest) (*model.ChannelConfig, error) {
@@ -113,6 +122,15 @@ func (s *configService) Update(ctx context.Context, id uint, req *model.UpdateCh
 	}
 	if req.EncryptKey != nil {
 		cfg.EncryptKey = *req.EncryptKey
+	}
+	if req.WelcomeMsg != nil {
+		cfg.WelcomeMsg = *req.WelcomeMsg
+	}
+	if req.Signature != nil {
+		cfg.Signature = *req.Signature
+	}
+	if req.CategoryID != nil {
+		cfg.CategoryID = req.CategoryID
 	}
 
 	if err := s.cfgRepo.Update(ctx, cfg); err != nil {

@@ -1,6 +1,6 @@
 # Husky 项目实施现状
 
-> 最后更新: 2026-05-29
+> 最后更新: 2026-05-31
 > 
 > 目标: 对标飞书服务台功能，逐步实现企业级智能工单系统。支持多渠道接入 -> 网关统一处理 -> Agent + SOP 智能执行 -> 人工协作的完整链路。
 
@@ -80,8 +80,10 @@
 | 14 | 推荐问题/猜你想问 | ✅ 已实现 | ViewCount + HotScore 热度统计 + Recommend API | P2 |
 | 15 | 知识库批量导入/导出 | ✅ 已实现 | JSON + CSV 两种格式，CSV 支持 multipart 上传和文件下载 | P2 |
 | 16 | 多语言知识库 | ✅ 已实现 | zh/en 标题/内容字段 + Language 属性 | P2 |
-| 17 | 工单自定义字段 | ✅ 已实现 | TicketField 定义 + TicketFieldValue 存储 + CRUD API | P2 |
-| 18 | 工单合并/关联 | ✅ 已实现 | TicketRelation 模型 + CRUD API，支持 parent/child/related/duplicate/blocks | P2 |
+| 17 | 工单合并/关联 | ✅ 已实现 | TicketRelation 模型 + CRUD API，支持 parent/child/related/duplicate/blocks | P2 |
+| 18 | 渠道用户/群组管理 | ✅ 已实现 | ChannelUser/ChannelGroup 模型 + 标签关联，按渠道区分 Bot 职责 | P2 |
+| 19 | 菜单管理 | ✅ 已实现 | Menu 模型 + 按角色筛选 + admin 管理界面 | P1 |
+| 18 | 渠道用户/群组管理 | ✅ 已实现 | ChannelUser/ChannelGroup 模型 + 标签关联，按渠道区分 Bot 职责 | P2 |
 
 ### 需求不合理/不明确项
 
@@ -137,17 +139,11 @@
 - [x] RBAC 细粒度权限（permission-resource-action 矩阵 + PermissionMiddleware）
 - [x] 多语言知识库（zh/en 标题/内容字段，language 筛选）
 - [x] 推荐问题/猜你想问（ViewCount + HotScore 热度统计，Recommend API）
-- [x] 工单自定义字段（TicketField 定义 + TicketFieldValue 存储，CRUD API）
 - [x] 机器人欢迎语/签名（BotConfig 模型 + API + Gateway 自动发送）
-- [x] 飞书用户信息 LDAP 同步（ldap.Service 同步 + SyncLDAP API）
 - [x] 客服工单面板（前端：状态编辑下拉、标签管理弹窗、内部备注复选框）
 
 ### Phase 2 — 剩余
 - [ ] 多语言知识库
-- [ ] 飞书用户信息 LDAP 同步
-
-### Phase 3 — 未来
-- [ ] 工单自定义字段
 
 ---
 

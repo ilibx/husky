@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"embed"
+	_ "embed"
 
 	"github.com/husky/husky/internal/config"
 	"github.com/husky/husky/internal/database"

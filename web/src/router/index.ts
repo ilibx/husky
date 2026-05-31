@@ -19,18 +19,7 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/DashboardView.vue'),
         meta: { title: '仪表盘', icon: 'Odometer' },
       },
-      {
-        path: 'users',
-        name: 'Users',
-        component: () => import('@/views/users/UserList.vue'),
-        meta: { title: '用户管理', icon: 'User' },
-      },
-      {
-        path: 'sops',
-        name: 'SOPs',
-        component: () => import('@/views/sops/SOPList.vue'),
-        meta: { title: 'SOP 管理', icon: 'List' },
-      },
+      // ---- 工单管理 ----
       {
         path: 'tickets',
         name: 'Tickets',
@@ -41,14 +30,9 @@ const routes: RouteRecordRaw[] = [
         path: 'tasks',
         name: 'Tasks',
         component: () => import('@/views/tasks/TaskList.vue'),
-        meta: { title: '我的待办', icon: 'List' },
+        meta: { title: '我的待办' },
       },
-      {
-        path: 'knowledge',
-        name: 'Knowledge',
-        component: () => import('@/views/knowledge/KnowledgeList.vue'),
-        meta: { title: '知识库管理', icon: 'Reading' },
-      },
+      // ---- 智能服务 ----
       {
         path: 'agents',
         name: 'Agents',
@@ -56,11 +40,49 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Agent 管理', icon: 'Cpu' },
       },
       {
-        path: 'categories',
-        name: 'Categories',
-        component: () => import('@/views/categories/CategoryList.vue'),
-        meta: { title: '分类管理', icon: 'FolderOpened' },
+        path: 'sops',
+        name: 'SOPs',
+        component: () => import('@/views/sops/SOPList.vue'),
+        meta: { title: 'SOP 管理' },
       },
+      {
+        path: 'skills',
+        name: 'Skills',
+        component: () => import('@/views/skills/SkillManagement.vue'),
+        meta: { title: 'Skill 管理', icon: 'MagicStick' },
+      },
+      {
+        path: 'mcps',
+        name: 'MCPs',
+        component: () => import('@/views/mcps/MCPManagement.vue'),
+        meta: { title: 'MCP 服务', icon: 'Cpu' },
+      },
+      // ---- 资料管理 ----
+      {
+        path: 'knowledge',
+        redirect: '/knowledge/docs',
+        children: [
+          {
+            path: 'docs',
+            name: 'KnowledgeDocs',
+            component: () => import('@/views/knowledge/KnowledgeDocs.vue'),
+            meta: { title: '文档管理' },
+          },
+          {
+            path: 'config',
+            name: 'KnowledgeConfig',
+            component: () => import('@/views/knowledge/KnowledgeConfig.vue'),
+            meta: { title: '向量库配置' },
+          },
+          {
+            path: 'search',
+            name: 'KnowledgeSearch',
+            component: () => import('@/views/knowledge/KnowledgeSearch.vue'),
+            meta: { title: '资料检索' },
+          },
+        ],
+      },
+      // ---- 系统管理 ----
       {
         path: 'departments',
         name: 'Departments',
@@ -74,78 +96,87 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '角色管理', icon: 'Key' },
       },
       {
+        path: 'users',
+        name: 'Users',
+        component: () => import('@/views/users/UserList.vue'),
+        meta: { title: '用户管理', icon: 'User' },
+      },
+      {
+        path: 'menus',
+        name: 'Menus',
+        component: () => import('@/views/menus/MenuManagement.vue'),
+        meta: { title: '菜单管理', icon: 'Menu' },
+      },
+      {
+        path: 'categories',
+        name: 'Categories',
+        component: () => import('@/views/categories/CategoryList.vue'),
+        meta: { title: '分类管理', icon: 'FolderOpened' },
+      },
+      {
         path: 'tags',
         name: 'Tags',
         component: () => import('@/views/tags/TagList.vue'),
         meta: { title: '标签管理', icon: 'PriceTag' },
       },
-      {
-        path: 'channels',
-        name: 'Channels',
-        component: () => import('@/views/channels/ChannelList.vue'),
-        meta: { title: '渠道配置', icon: 'Connection' },
-      },
-      {
-        path: 'ticket-fields',
-        name: 'TicketFields',
-        component: () => import('@/views/ticketfields/TicketFields.vue'),
-        meta: { title: '自定义字段', icon: 'Setting' },
-      },
-        {
-          path: 'ldap',
-          name: 'LDAP',
-          component: () => import('@/views/ldap/LDAPSync.vue'),
-          meta: { title: 'LDAP 同步', icon: 'RefreshRight' },
-        },
-        {
-          path: 'email-configs',
-          name: 'EmailConfigs',
-          component: () => import('@/views/email/EmailConfigList.vue'),
-          meta: { title: '邮件配置', icon: 'Mail' },
-        },
-      {
-        path: 'sla-configs',
-        name: 'SLAConfigs',
-        component: () => import('@/views/slaconfig/SLAConfigList.vue'),
-        meta: { title: 'SLA 配置', icon: 'Timer' },
-      },
-      {
-        path: 'webhook-configs',
-        name: 'WebhookConfigs',
-        component: () => import('@/views/webhooks/WebhookConfigList.vue'),
-        meta: { title: 'Webhook 配置', icon: 'Connection' },
-      },
+      // ---- 通知管理 ----
       {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notifications/NotificationList.vue'),
-        meta: { title: '通知中心', icon: 'Bell' },
+        meta: { title: '通知列表', icon: 'Bell' },
       },
       {
-        path: 'system-config',
-        name: 'SystemConfig',
-        component: () => import('@/views/systemconfig/SystemConfig.vue'),
-        meta: { title: '系统配置', icon: 'Setting' },
-        },
-        {
-          path: 'skills',
-          name: 'Skills',
-          component: () => import('@/views/skills/SkillManagement.vue'),
-          meta: { title: 'Skill 管理', icon: 'Puzzle' },
-        },
-        {
-          path: 'mcps',
-          name: 'MCPs',
-          component: () => import('@/views/mcps/MCPManagement.vue'),
-          meta: { title: 'MCP 服务', icon: 'Cpu' },
-        },
-        {
-          path: 'menus',
-          name: 'Menus',
-          component: () => import('@/views/menus/MenuManagement.vue'),
-          meta: { title: '菜单管理', icon: 'Menu' },
-        },
-      ],
+        path: 'push-config',
+        name: 'PushConfig',
+        component: () => import('@/views/pushconfig/PushManagement.vue'),
+        meta: { title: '推送管理' },
+      },
+      {
+        path: 'notification-levels',
+        name: 'NotificationLevels',
+        component: () => import('@/views/notificationlevels/LevelManagement.vue'),
+        meta: { title: '等级管理' },
+      },
+      {
+        path: 'sla-configs',
+        name: 'SLAConfigs',
+        component: () => import('@/views/slaconfig/SLAConfigList.vue'),
+        meta: { title: 'SLA 配置' },
+      },
+      // ---- 渠道管理 ----
+      {
+        path: 'channels',
+        redirect: '/channels/list',
+        children: [
+          {
+            path: 'list',
+            name: 'Channels',
+            component: () => import('@/views/channels/ChannelList.vue'),
+            meta: { title: '渠道列表', icon: 'Connection' },
+          },
+        ],
+      },
+      // ---- 模型管理 ----
+      {
+        path: 'models',
+        redirect: '/models/platforms',
+        children: [
+          {
+            path: 'platforms',
+            name: 'ModelPlatforms',
+            component: () => import('@/views/models/ModelPlatform.vue'),
+            meta: { title: '平台管理', icon: 'Monitor' },
+          },
+          {
+            path: 'configs',
+            name: 'ModelConfigs',
+            component: () => import('@/views/models/ModelConfig.vue'),
+            meta: { title: '模型配置', icon: 'Monitor' },
+          },
+        ],
+      },
+    ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
 ]

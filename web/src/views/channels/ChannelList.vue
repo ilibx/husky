@@ -1,193 +1,206 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/api/request'
 
-interface Channel {
+interface ChannelConfig {
   id: number
   name: string
   type: string
-  config: string
-  enabled: number
-  status: string
+  enabled: boolean
+  status: number
+  app_id: string
+  webhook_url: string
+  welcome_msg: string
+  signature: string
+  category_id: number | null
   created_at: string
 }
 
-interface BotConfig {
-  channel: string
-  welcome_msg: string
-  signature: string
-  enabled: number
-}
+const configs = ref<ChannelConfig[]>([])
+const configLoading = ref(false)
+const configDialog = ref(false)
+const isEditConfig = ref(false)
+const emptyForm = () => ({
+  name: '', type: 'lark', app_id: '', app_secret: '', agent_id: '',
+  webhook_url: '', verify_token: '', encrypt_key: '',
+  welcome_msg: '', signature: '', category_id: null, enabled: true
+})
+const configForm = ref<any>(emptyForm())
 
-const channels = ref<Channel[]>([])
-const loading = ref(false)
-const dialogVisible = ref(false)
-const formTitle = ref('新增通道')
-const form = ref<Channel>({ id: 0, name: '', type: 'lark', config: '', enabled: 1, status: '', created_at: '' })
-const botForm = ref<BotConfig>({ channel: '', welcome_msg: '', signature: '', enabled: 1 })
+const isBot = computed(() => configForm.value.type !== 'email')
 
-async function fetchData() {
-  loading.value = true
+async function fetchConfigs() {
+  configLoading.value = true
   try {
     const res: any = await request.get('/channels')
-    channels.value = res.data || []
-  } catch {
-    channels.value = []
-  } finally {
-    loading.value = false
-  }
+    configs.value = res.data?.data || []
+  } catch { configs.value = [] }
+  finally { configLoading.value = false }
 }
 
-async function openAdd() {
-  formTitle.value = '新增通道'
-  form.value = { id: 0, name: '', type: 'lark', config: '', enabled: 1, status: '', created_at: '' }
-  botForm.value = { channel: 'lark', welcome_msg: '', signature: '', enabled: 1 }
-  dialogVisible.value = true
+function openAddConfig() {
+  isEditConfig.value = false
+  configForm.value = emptyForm()
+  configDialog.value = true
 }
 
-async function openEdit(row: Channel) {
-  formTitle.value = '编辑通道'
-  form.value = { ...row }
-  botForm.value = { channel: row.type, welcome_msg: '', signature: '', enabled: 1 }
-  // Load existing bot config if any
+function openEditConfig(row: ChannelConfig) {
+  isEditConfig.value = true
+  configForm.value = { ...row }
+  configDialog.value = true
+}
+
+async function saveConfig() {
   try {
-    const res: any = await request.get(`/bot-config/${row.type}`)
-    if (res.data) {
-      botForm.value = res.data
-    }
-  } catch {
-    // use defaults
-  }
-  dialogVisible.value = true
-}
-
-async function handleSave() {
-  try {
-    const payload = { name: form.value.name, type: form.value.type, config: form.value.config, enabled: form.value.enabled }
-    if (form.value.id) {
-      await request.put(`/channels/${form.value.id}`, payload)
+    if (isEditConfig.value) {
+      await request.put(`/channels/${configForm.value.id}`, configForm.value)
+      ElMessage.success('更新成功')
     } else {
-      await request.post('/channels', payload)
+      await request.post('/channels', configForm.value)
+      ElMessage.success('创建成功')
     }
-    // Save bot config
-    botForm.value.channel = form.value.type
-    await request.post('/bot-config', botForm.value)
-    ElMessage.success('保存成功')
-    dialogVisible.value = false
-    fetchData()
-  } catch {
-    // handled by interceptor
-  }
+    configDialog.value = false
+    fetchConfigs()
+  } catch { /* handled */ }
 }
 
-async function handleDelete(id: number) {
+async function deleteConfig(id: number) {
   try {
-    await ElMessageBox.confirm('确认删除该通道吗？', '提示')
+    await ElMessageBox.confirm('确认删除？', '提示')
     await request.delete(`/channels/${id}`)
     ElMessage.success('删除成功')
-    fetchData()
-  } catch {
-    // cancelled or error
-  }
+    fetchConfigs()
+  } catch { /* cancelled */ }
 }
 
-const typeTag = (type: string) => {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'info' | 'danger'> = { lark: 'primary', dingtalk: 'success', wecom: 'warning' }
-  return map[type] || 'info'
+const typeMap: Record<string, string> = { lark: '飞书', dingtalk: '钉钉', wecom: '企微', email: '邮件' }
+
+const categories = ref<{ id: number; name: string }[]>([])
+async function fetchCategories() {
+  try {
+    const res: any = await request.get('/categories')
+    categories.value = res.data?.data || []
+  } catch { categories.value = [] }
 }
 
-const typeLabel = (type: string) => {
-  const map: Record<string, string> = { lark: '飞书', dingtalk: '钉钉', wecom: '企业微信' }
-  return map[type] || type
-}
-
-onMounted(fetchData)
+onMounted(() => {
+  fetchConfigs()
+  fetchCategories()
+})
 </script>
 
 <template>
   <div>
     <div class="page-header">
-      <h2>渠道配置</h2>
-      <el-button type="primary" @click="openAdd">新增渠道</el-button>
+      <h2><el-icon><Connection /></el-icon> 渠道列表</h2>
     </div>
 
     <el-card>
-      <el-table :data="channels" v-loading="loading" stripe border style="width: 100%">
-        <el-table-column prop="id" label="ID" width="60" />
+      <div class="tab-toolbar">
+        <el-button type="primary" @click="openAddConfig">新增渠道</el-button>
+      </div>
+      <el-table :data="configs" v-loading="configLoading" stripe style="width: 100%">
         <el-table-column prop="name" label="名称" min-width="120" />
-        <el-table-column prop="type" label="类型" width="120">
+        <el-table-column prop="type" label="类型" width="100">
           <template #default="{ row }">
-            <el-tag :type="typeTag(row.type)">{{ typeLabel(row.type) }}</el-tag>
+            <el-tag>{{ typeMap[row.type] || row.type }}</el-tag>
           </template>
         </el-table-column>
+        <el-table-column prop="app_id" label="AppID" min-width="160" />
+        <el-table-column prop="webhook_url" label="Webhook" min-width="200" show-overflow-tooltip />
         <el-table-column prop="enabled" label="启用" width="80">
           <template #default="{ row }">
-            <el-tag :type="row.enabled === 1 ? 'success' : 'warning'">{{ row.enabled === 1 ? '是' : '否' }}</el-tag>
+            <el-tag :type="row.enabled ? 'success' : 'info'">{{ row.enabled ? '是' : '否' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="status" label="状态" width="100" />
-        <el-table-column prop="created_at" label="创建时间" width="180" />
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column prop="created_at" label="创建时间" width="170" />
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row.id)">删除</el-button>
+            <el-button size="small" @click="openEditConfig(row)">编辑</el-button>
+            <el-button size="small" type="danger" @click="deleteConfig(row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
-    </el-card>
 
-    <el-dialog v-model="dialogVisible" :title="formTitle" width="600px">
-      <el-form :model="form" label-width="100px">
-        <el-form-item label="名称">
-          <el-input v-model="form.name" />
-        </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="form.type">
-            <el-option label="飞书" value="lark" />
-            <el-option label="钉钉" value="dingtalk" />
-            <el-option label="企业微信" value="wecom" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="配置">
-          <el-input v-model="form.config" type="textarea" :rows="4" placeholder="JSON 格式配置（可选）" />
-        </el-form-item>
-        <el-divider>机器人设置</el-divider>
-        <el-form-item label="欢迎消息">
-          <el-input v-model="botForm.welcome_msg" type="textarea" :rows="3" placeholder="新工单创建时自动发送的欢迎消息" />
-        </el-form-item>
-        <el-form-item label="签名">
-          <el-input v-model="botForm.signature" type="textarea" :rows="2" placeholder="消息末尾自动附加的签名" />
-        </el-form-item>
-        <el-form-item label="启用">
-          <div class="switch-group">
-            <span>渠道：</span>
-            <el-switch v-model="form.enabled" :active-value="1" :inactive-value="0" />
-            <span style="margin-left: 16px;">机器人：</span>
-            <el-switch v-model="botForm.enabled" :active-value="1" :inactive-value="0" />
-          </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">保存</el-button>
-      </template>
-    </el-dialog>
+      <el-dialog v-model="configDialog" :title="isEditConfig ? '编辑渠道' : '新增渠道'" width="600px">
+        <el-form :model="configForm" label-width="120px">
+          <el-form-item label="名称">
+            <el-input v-model="configForm.name" />
+          </el-form-item>
+          <el-form-item label="类型">
+            <el-select v-model="configForm.type">
+              <el-option label="飞书" value="lark" />
+              <el-option label="钉钉" value="dingtalk" />
+              <el-option label="企微" value="wecom" />
+              <el-option label="邮件" value="email" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="启用">
+            <el-switch v-model="configForm.enabled" />
+          </el-form-item>
+          <template v-if="isBot">
+            <el-form-item label="职责分类">
+              <el-select v-model="configForm.category_id" placeholder="选择分类（可选）" clearable>
+                <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+              <div class="form-help">关联分类后，该渠道只处理对应分类的工单</div>
+            </el-form-item>
+            <el-form-item label="欢迎语">
+              <el-input v-model="configForm.welcome_msg" type="textarea" :rows="3" placeholder="新对话时自动发送的欢迎消息" />
+            </el-form-item>
+            <el-form-item label="签名">
+              <el-input v-model="configForm.signature" type="textarea" :rows="2" placeholder="消息末尾附带的签名" />
+            </el-form-item>
+            <el-form-item label="AppID">
+              <el-input v-model="configForm.app_id" />
+            </el-form-item>
+            <el-form-item label="AppSecret">
+              <el-input v-model="configForm.app_secret" type="password" show-password />
+            </el-form-item>
+            <el-form-item label="AgentID">
+              <el-input v-model="configForm.agent_id" />
+            </el-form-item>
+            <el-form-item label="Webhook URL">
+              <el-input v-model="configForm.webhook_url" />
+            </el-form-item>
+            <el-form-item label="VerifyToken">
+              <el-input v-model="configForm.verify_token" />
+            </el-form-item>
+            <el-form-item label="EncryptKey">
+              <el-input v-model="configForm.encrypt_key" type="password" show-password />
+            </el-form-item>
+          </template>
+          <template v-else>
+            <el-form-item label="分类">
+              <el-select v-model="configForm.category_id" placeholder="选择分类（可选）" clearable>
+                <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="签名">
+              <el-input v-model="configForm.signature" type="textarea" :rows="2" placeholder="邮件末尾附带的签名" />
+            </el-form-item>
+          </template>
+        </el-form>
+        <template #footer>
+          <el-button @click="configDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveConfig">保存</el-button>
+        </template>
+      </el-dialog>
+    </el-card>
   </div>
 </template>
 
 <style scoped>
-.page-header {
+.tab-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
 }
-.page-header h2 {
-  margin: 0;
-}
-.switch-group {
-  display: flex;
-  align-items: center;
+.form-help {
+  font-size: 12px;
+  color: var(--text-muted, #94a3b8);
+  margin-top: 4px;
 }
 </style>

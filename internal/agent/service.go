@@ -11,7 +11,7 @@ import (
 type Service interface {
 	Create(ctx context.Context, userID uint, req *model.CreateAgentRequest) (*model.Agent, error)
 	GetByID(ctx context.Context, id uint) (*model.Agent, error)
-	List(ctx context.Context, offset, limit int) ([]model.Agent, int64, error)
+	List(ctx context.Context, offset, limit int, keyword string) ([]model.Agent, int64, error)
 	Update(ctx context.Context, id uint, req *model.UpdateAgentRequest) (*model.Agent, error)
 	Delete(ctx context.Context, id uint) error
 }
@@ -60,8 +60,8 @@ func (s *service) GetByID(ctx context.Context, id uint) (*model.Agent, error) {
 	return agent, nil
 }
 
-func (s *service) List(ctx context.Context, offset, limit int) ([]model.Agent, int64, error) {
-	return s.agentRepo.List(ctx, offset, limit)
+func (s *service) List(ctx context.Context, offset, limit int, keyword string) ([]model.Agent, int64, error) {
+	return s.agentRepo.List(ctx, offset, limit, keyword)
 }
 
 func (s *service) Update(ctx context.Context, id uint, req *model.UpdateAgentRequest) (*model.Agent, error) {

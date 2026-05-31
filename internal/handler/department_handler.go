@@ -36,7 +36,8 @@ func (h *DepartmentHandler) CreateDepartment(c *gin.Context) {
 }
 
 func (h *DepartmentHandler) ListDepartments(c *gin.Context) {
-	list, err := h.deptService.List(c.Request.Context())
+	keyword := c.Query("keyword")
+	list, err := h.deptService.List(c.Request.Context(), keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

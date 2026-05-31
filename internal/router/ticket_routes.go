@@ -32,12 +32,7 @@ func setupTicketRoutes(group *gin.RouterGroup, h *ticket.TicketHandler) {
 	group.PUT("/:id/tags", h.UpdateTicketTags)
 	group.POST("/:id/tags", h.AddTicketTags)
 	group.DELETE("/:id/tags/:tagId", h.RemoveTicketTag)
-	group.GET("/fields/definitions", h.ListTicketFields)
-	group.POST("/fields/definitions", h.CreateTicketField)
-	group.PUT("/fields/definitions/:id", h.UpdateTicketField)
-	group.DELETE("/fields/definitions/:id", h.DeleteTicketField)
-	group.GET("/:id/fields", h.GetTicketFieldValues)
-	group.PUT("/:id/fields", h.UpdateTicketFieldValues)
+
 }
 
 func setupSLAConfigRoutes(group *gin.RouterGroup, h *ticket.TicketHandler) {

@@ -209,7 +209,7 @@ func (s *WorkflowService) selectAgent(ctx context.Context, step *model.WorkflowS
 			return agent
 		}
 	}
-	agents, _, err := s.agentRepo.List(ctx, 0, 100)
+	agents, _, err := s.agentRepo.List(ctx, 0, 100, "")
 	if err != nil {
 		log.Printf("findAvailableAgent: failed to list agents: %v", err)
 		return nil

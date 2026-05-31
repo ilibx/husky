@@ -23,37 +23,59 @@ onMounted(async () => {
 
 <template>
   <div class="dashboard">
-    <h2>仪表盘</h2>
+    <div class="page-header">
+      <h2><el-icon><DataAnalysis /></el-icon> 仪表盘</h2>
+    </div>
     <el-row :gutter="20" class="stats-row">
       <el-col :span="6">
         <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-value">{{ stats.ticketCount }}</div>
-            <div class="stat-label">工单总数</div>
+          <div class="dashboard-stat">
+            <div class="dashboard-stat-icon" style="background: linear-gradient(135deg, #6366f1, #8b5cf6);">
+              <el-icon :size="24"><Ticket /></el-icon>
+            </div>
+            <div class="dashboard-stat-info">
+              <div class="dashboard-stat-value">{{ stats.ticketCount }}</div>
+              <div class="dashboard-stat-label">工单总数</div>
+            </div>
           </div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-value">{{ stats.userCount }}</div>
-            <div class="stat-label">用户总数</div>
+          <div class="dashboard-stat">
+            <div class="dashboard-stat-icon" style="background: linear-gradient(135deg, #06b6d4, #0891b2);">
+              <el-icon :size="24"><User /></el-icon>
+            </div>
+            <div class="dashboard-stat-info">
+              <div class="dashboard-stat-value">{{ stats.userCount }}</div>
+              <div class="dashboard-stat-label">用户总数</div>
+            </div>
           </div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-value">{{ stats.sopCount }}</div>
-            <div class="stat-label">SOP 数量</div>
+          <div class="dashboard-stat">
+            <div class="dashboard-stat-icon" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+              <el-icon :size="24"><Document /></el-icon>
+            </div>
+            <div class="dashboard-stat-info">
+              <div class="dashboard-stat-value">{{ stats.sopCount }}</div>
+              <div class="dashboard-stat-label">SOP 数量</div>
+            </div>
           </div>
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover">
-          <div class="stat-card">
-            <div class="stat-value">{{ stats.todayActive }}</div>
-            <div class="stat-label">今日活跃</div>
+          <div class="dashboard-stat">
+            <div class="dashboard-stat-icon" style="background: linear-gradient(135deg, #22c55e, #16a34a);">
+              <el-icon :size="24"><TrendCharts /></el-icon>
+            </div>
+            <div class="dashboard-stat-info">
+              <div class="dashboard-stat-value">{{ stats.todayActive }}</div>
+              <div class="dashboard-stat-label">今日活跃</div>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -62,24 +84,43 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-.dashboard h2 {
-  margin-bottom: 20px;
-}
 .stats-row {
   margin-bottom: 24px;
 }
-.stat-card {
-  text-align: center;
-  padding: 20px 0;
+
+.dashboard-stat {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
 }
-.stat-value {
-  font-size: 36px;
-  font-weight: bold;
-  color: #409eff;
+
+.dashboard-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
 }
-.stat-label {
-  margin-top: 8px;
-  color: #666;
-  font-size: 14px;
+
+.dashboard-stat-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.dashboard-stat-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.dashboard-stat-label {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--text-secondary);
 }
 </style>

@@ -53,7 +53,8 @@ func (h *CRUDHandler) ListAgents(c *gin.Context) {
 		return
 	}
 
-	list, total, err := h.agentService.List(c.Request.Context(), offset, limit)
+	keyword := c.Query("keyword")
+	list, total, err := h.agentService.List(c.Request.Context(), offset, limit, keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

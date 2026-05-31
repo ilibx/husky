@@ -236,6 +236,6 @@ func (s *WorkflowService) ListWorkflows(ctx context.Context, offset, limit int, 
 	return s.wfRepo.List(ctx, offset, limit, filters)
 }
 
-func (s *WorkflowService) ListPendingSteps(ctx context.Context, userID uint, offset, limit int) ([]model.WorkflowStep, int64, error) {
-	return s.wfRepo.ListStepsByAssignee(ctx, userID, offset, limit)
+func (s *WorkflowService) ListPendingSteps(ctx context.Context, userID uint, offset, limit int, keyword string) ([]model.WorkflowStep, int64, error) {
+	return s.wfRepo.ListStepsByAssignee(ctx, userID, offset, limit, keyword)
 }

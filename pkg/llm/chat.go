@@ -8,8 +8,9 @@ import (
 
 // ChatService LLM 对话服务
 type ChatService struct {
-	provider   ChatProvider
-	limiter    *TokenBucket
+	provider     ChatProvider
+	limiter      *TokenBucket
+	defaultModel string
 }
 
 // ChatServiceOption 配置 ChatService
@@ -21,6 +22,13 @@ func WithRateLimit(rps int, burst int) ChatServiceOption {
 		if rps > 0 {
 			s.limiter = NewTokenBucket(rps, burst)
 		}
+	}
+}
+
+// WithDefaultModel sets the default model for chat requests without an explicit Model.
+func WithDefaultModel(model string) ChatServiceOption {
+	return func(s *ChatService) {
+		s.defaultModel = model
 	}
 }
 
@@ -43,6 +51,9 @@ func (s *ChatService) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse
 		if err := s.limiter.Wait(ctx); err != nil {
 			return nil, err
 		}
+	}
+	if req.Model == "" && s.defaultModel != "" {
+		req.Model = s.defaultModel
 	}
 	return s.provider.Chat(ctx, req)
 }

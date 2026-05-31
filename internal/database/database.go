@@ -83,11 +83,18 @@ func AutoMigrate(db *gorm.DB) error {
 		&model.Tag{},
 		&model.AssignConfig{},
 		&model.TicketRelation{},
-		&model.TicketField{},
-		&model.TicketFieldValue{},
+
 		&model.BotConfig{},
 		&model.SystemConfig{},
 		&model.Menu{},
+		&model.Workflow{},
+		&model.WorkflowStep{},
+		&model.SLAConfig{},
+		&model.WebhookConfig{},
+		&model.Skill{},
+		&model.MCP{},
+		&model.ChannelUser{},
+		&model.ChannelGroup{},
 	)
 
 	if err != nil {

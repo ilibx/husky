@@ -55,16 +55,22 @@ function handleLogout() {
 </script>
 
 <template>
-  <el-container style="height: 100vh">
+  <el-container class="layout-container">
     <el-aside :width="app.sidebarCollapsed ? '64px' : '220px'" class="aside">
-      <div class="logo">{{ app.sidebarCollapsed ? 'HA' : '工单管理' }}</div>
+      <div class="logo">
+        <span class="logo-icon">
+          <el-icon :size="22"><Setting /></el-icon>
+        </span>
+        <span v-show="!app.sidebarCollapsed" class="logo-text">工单管理</span>
+      </div>
       <el-menu
         :default-active="route.path"
         :collapse="app.sidebarCollapsed"
         router
-        background-color="#304156"
-        text-color="#bfcbd9"
-        active-text-color="#409eff"
+        :collapse-transition="false"
+        background-color="transparent"
+        text-color="#94a3b8"
+        active-text-color="#ffffff"
       >
         <template v-for="item in menuItems" :key="item.id || item.name">
           <el-sub-menu v-if="item.children && item.children.length" :index="item.name">
@@ -88,7 +94,7 @@ function handleLogout() {
     <el-container>
       <el-header class="header">
         <div class="header-left">
-          <el-icon class="collapse-btn" @click="app.toggleSidebar" size="20">
+          <el-icon class="collapse-btn" @click="app.toggleSidebar" size="18">
             <Fold v-if="!app.sidebarCollapsed" />
             <Expand v-else />
           </el-icon>
@@ -105,8 +111,8 @@ function handleLogout() {
           </el-badge>
           <el-dropdown trigger="click">
             <span class="user-info">
-              <el-avatar :size="28" :icon="'UserFilled'" />
-              {{ user.userInfo?.nickname || user.userInfo?.username || '管理员' }}
+              <el-avatar :size="30" :icon="'UserFilled'" class="user-avatar" />
+              <span class="user-name">{{ user.userInfo?.nickname || user.userInfo?.username || '管理员' }}</span>
             </span>
             <template #dropdown>
               <el-dropdown-menu>
@@ -118,76 +124,203 @@ function handleLogout() {
       </el-header>
 
       <el-main class="main">
-        <router-view />
+        <div class="page-wrapper">
+          <router-view v-slot="{ Component }">
+            <transition name="fade" mode="out-in">
+              <component :is="Component" />
+            </transition>
+          </router-view>
+        </div>
       </el-main>
     </el-container>
   </el-container>
 </template>
 
 <style scoped>
+.layout-container {
+  height: 100vh;
+}
+
 .aside {
-  transition: width 0.3s;
+  transition: width 0.25s ease;
   overflow-x: hidden;
   overflow-y: auto;
-  background: #304156;
+  background: var(--sidebar-bg);
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
+
 .aside::-webkit-scrollbar {
   width: 4px;
 }
+
 .aside::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
   border-radius: 2px;
 }
+
 .logo {
   height: 56px;
-  line-height: 56px;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: #fff;
   font-size: 18px;
-  font-weight: bold;
-  letter-spacing: 2px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 700;
+  letter-spacing: 1px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
+
+.logo-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.logo-text {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.el-menu {
+  border-right: none !important;
+  padding: 8px 0;
+}
+
+.el-menu :deep(.el-menu-item),
+.el-menu :deep(.el-sub-menu__title) {
+  height: 44px;
+  line-height: 44px;
+  margin: 2px 8px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.el-menu :deep(.el-menu-item):hover,
+.el-menu :deep(.el-sub-menu__title):hover {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.el-menu :deep(.el-menu-item.is-active) {
+  background-color: rgba(99, 102, 241, 0.15) !important;
+  color: #fff !important;
+}
+
+.el-menu :deep(.el-sub-menu .el-menu) {
+  background-color: transparent !important;
+  padding: 0;
+}
+
+.el-menu :deep(.el-sub-menu .el-menu .el-menu-item) {
+  padding-left: 48px !important;
+  margin: 1px 8px;
+}
+
+.el-menu :deep(.el-menu-item .el-icon),
+.el-menu :deep(.el-sub-menu__title .el-icon) {
+  margin-right: 8px;
+}
+
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
-  background: #fff;
-  border-bottom: 1px solid #e6e6e6;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  padding: 0 24px;
+  height: var(--header-height);
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
+
 .header-left {
   display: flex;
   align-items: center;
   gap: 16px;
 }
+
 .collapse-btn {
   cursor: pointer;
-}
-.header-right {
+  color: var(--text-secondary);
+  transition: color 0.2s;
   display: flex;
   align-items: center;
 }
+
+.collapse-btn:hover {
+  color: var(--primary);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .user-info {
   display: flex;
   align-items: center;
   gap: 8px;
   cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
 }
+
+.user-info:hover {
+  background-color: #f1f5f9;
+}
+
+.user-avatar {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6) !important;
+}
+
+.user-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .notif-icon {
   cursor: pointer;
-  margin-right: 16px;
-  color: #666;
+  color: var(--text-secondary);
+  transition: color 0.2s;
+  display: flex;
+  align-items: center;
 }
+
 .notif-icon:hover {
-  color: #409eff;
+  color: var(--primary);
 }
+
 .notif-badge :deep(.el-badge__content) {
-  top: 8px;
-  right: 14px;
+  top: 6px;
+  right: 10px;
+  border: 2px solid #fff;
 }
+
 .main {
-  background: #f0f2f5;
+  background: var(--bg-page);
+  padding: 0;
+  overflow-y: auto;
+}
+
+.page-wrapper {
+  padding: 24px;
+  max-width: 1400px;
+  margin: 0 auto;
 }
 </style>

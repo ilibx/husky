@@ -29,13 +29,17 @@ func (r *SOPRepository) GetByID(ctx context.Context, id uint) (*model.SOP, error
 	return &sop, nil
 }
 
-func (r *SOPRepository) List(ctx context.Context, offset, limit int) ([]model.SOP, int64, error) {
+func (r *SOPRepository) List(ctx context.Context, offset, limit int, keyword string) ([]model.SOP, int64, error) {
 	var list []model.SOP
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&model.SOP{}).Count(&total).Error; err != nil {
+	query := r.db.WithContext(ctx).Model(&model.SOP{})
+	if keyword != "" {
+		query = query.Where("name ILIKE ?", "%"+keyword+"%")
+	}
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := r.db.WithContext(ctx).Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
+	err := query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
 }
 

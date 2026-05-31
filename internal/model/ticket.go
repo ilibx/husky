@@ -160,54 +160,6 @@ type TicketRelation struct {
 
 func (TicketRelation) TableName() string { return "ticket_relations" }
 
-// TicketField 工单自定义字段定义
-type TicketField struct {
-	Base
-	Name        string `gorm:"size:100;not null" json:"name"`
-	FieldKey    string `gorm:"size:100;uniqueIndex;not null" json:"field_key"`
-	FieldType   string `gorm:"size:50;not null;default:'text'" json:"field_type"` // text, textarea, select, multi_select, number, date, boolean
-	Options     string `gorm:"type:text" json:"options,omitempty"`                // JSON array for select/multi_select
-	Required    bool   `gorm:"default:false" json:"required"`
-	SortOrder   int    `gorm:"default:0" json:"sort_order"`
-	Placeholder string `gorm:"size:255" json:"placeholder,omitempty"`
-	Enabled     bool   `gorm:"default:true" json:"enabled"`
-}
-
-func (TicketField) TableName() string { return "ticket_fields" }
-
-// TicketFieldValue 工单自定义字段值
-type TicketFieldValue struct {
-	TicketID uint   `gorm:"primaryKey;autoIncrement:false" json:"ticket_id"`
-	FieldID  uint   `gorm:"primaryKey;autoIncrement:false" json:"field_id"`
-	Value    string `gorm:"type:text" json:"value"`
-
-	Field TicketField `gorm:"foreignKey:FieldID" json:"field,omitempty"`
-}
-
-func (TicketFieldValue) TableName() string { return "ticket_field_values" }
-
-// CreateTicketFieldRequest 创建自定义字段请求
-type CreateTicketFieldRequest struct {
-	Name        string `json:"name" binding:"required"`
-	FieldKey    string `json:"field_key" binding:"required"`
-	FieldType   string `json:"field_type" binding:"required"`
-	Options     string `json:"options,omitempty"`
-	Required    bool   `json:"required"`
-	SortOrder   int    `json:"sort_order"`
-	Placeholder string `json:"placeholder,omitempty"`
-}
-
-// UpdateTicketFieldRequest 更新自定义字段请求
-type UpdateTicketFieldRequest struct {
-	Name        *string `json:"name,omitempty"`
-	FieldType   *string `json:"field_type,omitempty"`
-	Options     *string `json:"options,omitempty"`
-	Required    *bool   `json:"required,omitempty"`
-	SortOrder   *int    `json:"sort_order,omitempty"`
-	Placeholder *string `json:"placeholder,omitempty"`
-	Enabled     *bool   `json:"enabled,omitempty"`
-}
-
 // AssignStrategy 分配策略
 type AssignStrategy string
 
@@ -242,6 +194,7 @@ type SLAConfig struct {
 	ResponseMinutes   int     `gorm:"default:60" json:"response_minutes"`                      // 首次响应时限（分钟）
 	ResolutionMinutes int     `gorm:"default:480" json:"resolution_minutes"`                   // 解决时限（分钟）
 	WarningThreshold  float64 `gorm:"default:0.8" json:"warning_threshold"`                    // 预警阈值 0.0-1.0
+	WarningLevel      string  `gorm:"size:20;default:'warning'" json:"warning_level"`         // 预警等级 critical, warning, info
 	Enabled           bool    `gorm:"default:true" json:"enabled"`
 }
 

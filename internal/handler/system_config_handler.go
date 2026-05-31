@@ -73,7 +73,7 @@ func (h *SystemConfigHandler) GetSystemConfigByKey(c *gin.Context) {
 
 	cfg, err := h.repo.GetByKey(c.Request.Context(), category, key)
 	if err != nil {
-		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, "config not found")
+		httputil.Success(c, nil)
 		return
 	}
 

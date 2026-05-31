@@ -57,7 +57,7 @@ func (d *DynamicConfig) InitLLM(ctx context.Context) error {
 
 	d.mu.Lock()
 	d.provider = provider
-	d.chatSvc = llm.NewChatService(provider, llm.WithRateLimit(10, 20))
+	d.chatSvc = llm.NewChatService(provider, llm.WithRateLimit(10, 20), llm.WithDefaultModel(dbCfg.Model))
 	d.embedSvc = llm.NewEmbeddingService(provider)
 	d.mu.Unlock()
 

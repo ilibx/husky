@@ -36,7 +36,8 @@ func (h *CategoryHandler) CreateCategory(c *gin.Context) {
 }
 
 func (h *CategoryHandler) ListCategories(c *gin.Context) {
-	list, err := h.categoryService.List(c.Request.Context())
+	keyword := c.Query("keyword")
+	list, err := h.categoryService.List(c.Request.Context(), keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

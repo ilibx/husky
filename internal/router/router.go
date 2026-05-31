@@ -146,7 +146,7 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 		})
 		return nil
 	})
-	slaConfigSvc = ticket.NewSLAConfigService(slaConfigRepo, webhookRepo, slaEventHandler, ticketRepo)
+	slaConfigSvc = ticket.NewSLAConfigService(slaConfigRepo, webhookRepo, sysCfgRepo, slaEventHandler, ticketRepo)
 	slaEscalator := ticket.NewSLAEscalator(ticketRepo, slaConfigSvc)
 	slaEscalator.Start(context.Background())
 
@@ -163,6 +163,10 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	deptHandler := handler.NewDepartmentHandler(deptService)
 	channelHandler := channel.NewHandler(gw, channelCfgSvc, ticketSvc, log)
+	channelUserRepo := repository.NewChannelUserRepository(dbConn.DB)
+	channelGroupRepo := repository.NewChannelGroupRepository(dbConn.DB)
+	channelUserHandler := channel.NewChannelUserHandler(channelUserRepo)
+	channelGroupHandler := channel.NewChannelGroupHandler(channelGroupRepo)
 	agentHandler := agent.NewCRUDHandler(agentSvc, sopSvc, workflowSvc, log)
 	systemCfgHandler := handler.NewSystemConfigHandler(sysCfgRepo, dynamicCfg, log)
 	menuRepo := repository.NewMenuRepository(dbConn.DB)
@@ -263,6 +267,14 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	channels.Use(auth.AuthMiddleware())
 	setupChannelConfigRoutes(channels, channelHandler)
 
+	channelUsers := v1.Group("/channel-users")
+	channelUsers.Use(auth.AuthMiddleware())
+	setupChannelUserRoutes(channelUsers, channelUserHandler)
+
+	channelGroups := v1.Group("/channel-groups")
+	channelGroups.Use(auth.AuthMiddleware())
+	setupChannelGroupRoutes(channelGroups, channelGroupHandler)
+
 	categories := v1.Group("/categories")
 	categories.Use(auth.AuthMiddleware())
 	setupCategoryRoutes(categories, categoryHandler)
@@ -294,26 +306,26 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 		cfgRoutes.DELETE("/:id", systemCfgHandler.DeleteSystemConfig)
 	}
 
-  // --- Menu (dynamic menu system, role-filtered) ---
-  menus := v1.Group("/menus")
-  menus.Use(auth.AuthMiddleware())
-  {
-    menus.GET("", menuHandler.GetMenus)          // returns menus for current role (all auth users)
-    menus.GET("/all", auth.RBACMiddleware("admin"), menuHandler.ListAllMenus)
-    menus.POST("", auth.RBACMiddleware("admin"), menuHandler.CreateMenu)
-    menus.PUT("/:id", auth.RBACMiddleware("admin"), menuHandler.UpdateMenu)
-    menus.DELETE("/:id", auth.RBACMiddleware("admin"), menuHandler.DeleteMenu)
-  }
-  
-  // --- Skill (AI skill management) ---
-  skills := v1.Group("/skills")
-  skills.Use(auth.AuthMiddleware(), auth.RBACMiddleware("admin"))
-  RegisterSkillRoutes(skills, dbConn.DB)
-  
-  // --- MCP (Managed Control Plane services) ---
-  mcps := v1.Group("/mcps")
-  mcps.Use(auth.AuthMiddleware(), auth.RBACMiddleware("admin"))
-  RegisterMCPRoutes(mcps, dbConn.DB)
+	// --- Menu (dynamic menu system, role-filtered) ---
+	menus := v1.Group("/menus")
+	menus.Use(auth.AuthMiddleware())
+	{
+		menus.GET("", menuHandler.GetMenus)          // returns menus for current role (all auth users)
+		menus.GET("/all", auth.RBACMiddleware("admin"), menuHandler.ListAllMenus)
+		menus.POST("", auth.RBACMiddleware("admin"), menuHandler.CreateMenu)
+		menus.PUT("/:id", auth.RBACMiddleware("admin"), menuHandler.UpdateMenu)
+		menus.DELETE("/:id", auth.RBACMiddleware("admin"), menuHandler.DeleteMenu)
+	}
+
+	// --- Skill (AI skill management) ---
+	skills := v1.Group("/skills")
+	skills.Use(auth.AuthMiddleware(), auth.RBACMiddleware("admin"))
+	RegisterSkillRoutes(skills, dbConn.DB)
+
+	// --- MCP (Managed Control Plane services) ---
+	mcps := v1.Group("/mcps")
+	mcps.Use(auth.AuthMiddleware(), auth.RBACMiddleware("admin"))
+	RegisterMCPRoutes(mcps, dbConn.DB)
 
 	webhooks := r.Group("/webhooks")
 	setupWebhookRoutes(webhooks, channelHandler)
@@ -328,7 +340,7 @@ func loadFeishuConfig(ctx context.Context, repo *repository.ChannelConfigReposit
 	AppID     string
 	AppSecret string
 } {
-	configs, err := repo.List(ctx)
+	configs, err := repo.List(ctx, "")
 	if err != nil {
 		return nil
 	}

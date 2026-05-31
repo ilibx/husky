@@ -27,7 +27,8 @@ func (h *Handler) CreateChannelConfig(c *gin.Context) {
 }
 
 func (h *Handler) ListChannelConfigs(c *gin.Context) {
-	list, err := h.cfgSvc.List(c.Request.Context())
+	keyword := c.Query("keyword")
+	list, err := h.cfgSvc.List(c.Request.Context(), keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

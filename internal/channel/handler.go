@@ -16,7 +16,7 @@ import (
 type QueryService interface {
 	SaveWebhookMessage(ctx context.Context, msg *model.WebhookMessageRecord) error
 	ListWebhookMessages(ctx context.Context, offset, limit int, channel string) ([]model.WebhookMessageRecord, int64, error)
-	ListNotifications(ctx context.Context, userID uint, offset, limit int) ([]model.Notification, int64, error)
+	ListNotifications(ctx context.Context, userID uint, offset, limit int, keyword string) ([]model.Notification, int64, error)
 	GetUnreadCount(ctx context.Context, userID uint) (int64, error)
 	MarkNotificationRead(ctx context.Context, id, userID uint) error
 	MarkAllNotificationsRead(ctx context.Context, userID uint) error

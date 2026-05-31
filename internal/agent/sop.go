@@ -11,7 +11,7 @@ import (
 type SOPService interface {
 	Create(ctx context.Context, userID uint, req *model.CreateSOPRequest) (*model.SOP, error)
 	GetByID(ctx context.Context, id uint) (*model.SOP, error)
-	List(ctx context.Context, offset, limit int) ([]model.SOP, int64, error)
+	List(ctx context.Context, offset, limit int, keyword string) ([]model.SOP, int64, error)
 	Update(ctx context.Context, id uint, req *model.UpdateSOPRequest) (*model.SOP, error)
 	Delete(ctx context.Context, id uint) error
 }
@@ -33,14 +33,21 @@ func (s *sopService) Create(ctx context.Context, userID uint, req *model.CreateS
 		version = "1.0"
 	}
 
+	riskLevel := req.RiskLevel
+	if riskLevel == "" {
+		riskLevel = "low"
+	}
+
 	sop := &model.SOP{
-		Name:          req.Name,
-		Description:   req.Description,
-		Version:       version,
-		Steps:         req.Steps,
-		TriggerType:   req.TriggerType,
-		TriggerConfig: req.TriggerConfig,
-		CreatedBy:     userID,
+		Name:              req.Name,
+		Description:       req.Description,
+		Version:           version,
+		Steps:             req.Steps,
+		TriggerType:       req.TriggerType,
+		TriggerConfig:     req.TriggerConfig,
+		RiskLevel:         riskLevel,
+		NotificationConfig: req.NotificationConfig,
+		CreatedBy:         userID,
 	}
 
 	if err := s.sopRepo.Create(ctx, sop); err != nil {
@@ -57,8 +64,8 @@ func (s *sopService) GetByID(ctx context.Context, id uint) (*model.SOP, error) {
 	return sop, nil
 }
 
-func (s *sopService) List(ctx context.Context, offset, limit int) ([]model.SOP, int64, error) {
-	return s.sopRepo.List(ctx, offset, limit)
+func (s *sopService) List(ctx context.Context, offset, limit int, keyword string) ([]model.SOP, int64, error) {
+	return s.sopRepo.List(ctx, offset, limit, keyword)
 }
 
 func (s *sopService) Update(ctx context.Context, id uint, req *model.UpdateSOPRequest) (*model.SOP, error) {
@@ -84,6 +91,12 @@ func (s *sopService) Update(ctx context.Context, id uint, req *model.UpdateSOPRe
 	}
 	if req.TriggerConfig != nil {
 		sop.TriggerConfig = *req.TriggerConfig
+	}
+	if req.RiskLevel != nil {
+		sop.RiskLevel = *req.RiskLevel
+	}
+	if req.NotificationConfig != nil {
+		sop.NotificationConfig = *req.NotificationConfig
 	}
 	if req.Status != nil {
 		sop.Status = *req.Status

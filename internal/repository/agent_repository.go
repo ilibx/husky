@@ -29,13 +29,17 @@ func (r *AgentRepository) GetByID(ctx context.Context, id uint) (*model.Agent, e
 	return &agent, nil
 }
 
-func (r *AgentRepository) List(ctx context.Context, offset, limit int) ([]model.Agent, int64, error) {
+func (r *AgentRepository) List(ctx context.Context, offset, limit int, keyword string) ([]model.Agent, int64, error) {
 	var list []model.Agent
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&model.Agent{}).Count(&total).Error; err != nil {
+	query := r.db.WithContext(ctx).Model(&model.Agent{})
+	if keyword != "" {
+		query = query.Where("name ILIKE ?", "%"+keyword+"%")
+	}
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := r.db.WithContext(ctx).Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
+	err := query.Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
 }
 

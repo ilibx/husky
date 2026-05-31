@@ -104,12 +104,50 @@ open ──→ in_progress ──→ pending ──→ resolved ──→ closed
 | 分类列表 | `GET /api/v1/categories` | 认证用户 |
 | 创建/更新/删除 | `POST/PUT/DELETE` | 管理员 |
 
+### 标签管理
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| 标签列表 | `GET /api/v1/tags` | 全部标签 |
+| 创建/更新/删除 | `POST/PUT/DELETE /api/v1/tags/:id` | 管理员 |
+
 ### 渠道配置
 
 | 操作 | API | 说明 |
 |------|-----|------|
 | 渠道列表 | `GET /api/v1/channels` | |
 | 创建/更新/删除 | `POST/PUT/DELETE` | 管理员 |
+
+### 渠道用户管理
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| 渠道用户列表 | `GET /api/v1/channel-users` | 按渠道筛选 |
+| 创建/更新/删除 | `POST/PUT/DELETE /api/v1/channel-users/:id` | 管理员 |
+| 标签管理 | `POST /api/v1/channel-users/:id/tags` | 设置用户标签 |
+
+### 渠道群组管理
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| 渠道群组列表 | `GET /api/v1/channel-groups` | 按渠道筛选 |
+| 创建/更新/删除 | `POST/PUT/DELETE /api/v1/channel-groups/:id` | 管理员 |
+| 标签管理 | `POST /api/v1/channel-groups/:id/tags` | 设置群组标签 |
+
+### Bot 配置
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| 获取 Bot 配置 | `GET /api/v1/channels/:channel/bot-config` | |
+| 设置 Bot 配置 | `POST /api/v1/channels/:channel/bot-config` | 含分类关联 |
+
+### 菜单管理
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| 菜单树 | `GET /api/v1/menus` | 按角色返回可见菜单 |
+| 全部菜单 | `GET /api/v1/menus/all` | 管理员 |
+| 创建/更新/删除 | `POST/PUT/DELETE /api/v1/menus/:id` | 管理员 |
 
 ### 飞书渠道
 
@@ -120,6 +158,13 @@ open ──→ in_progress ──→ pending ──→ resolved ──→ closed
 | 操作 | API | 说明 |
 |------|-----|------|
 | 消息记录 | `GET /api/v1/messages` | 管理员，按渠道筛选 |
+
+### Webhook 配置
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| Webhook 配置列表 | `GET /api/v1/webhook-configs` | 管理员 |
+| 创建/更新/删除 | `POST/PUT/DELETE` | 管理员 |
 
 ### Webhook 接口
 
@@ -137,6 +182,34 @@ open ──→ in_progress ──→ pending ──→ resolved ──→ closed
 | 工单分布 | `GET /api/v1/stats/tickets` |
 | 绩效统计 | `GET /api/v1/stats/performance` |
 
+### 分配策略
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| 获取分配策略 | `GET /api/v1/assign-config` | |
+| 设置分配策略 | `POST /api/v1/assign-config` | 按分类配置 |
+
+### Skill 管理
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| Skill 列表 | `GET /api/v1/skills` | |
+| 创建/更新/删除 | `POST/PUT/DELETE /api/v1/skills/:id` | 管理员 |
+
+### MCP 服务管理
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| MCP 列表 | `GET /api/v1/mcps` | |
+| 创建/更新/删除 | `POST/PUT/DELETE /api/v1/mcps/:id` | 管理员 |
+
+### 系统配置
+
+| 操作 | API | 说明 |
+|------|-----|------|
+| 配置列表 | `GET /api/v1/system-config` | 分页查询 |
+| 更新配置 | `POST /api/v1/system-config/upsert` | 按 category+key |
+
 ## 数据表
 
 | 表名 | 说明 |
@@ -146,7 +219,7 @@ open ──→ in_progress ──→ pending ──→ resolved ──→ closed
 | `comments` | 评论 |
 | `attachments` | 附件 |
 | `categories` | 分类 |
-| `knowledge_base` | 知识库（含向量） |
+| `knowledge` | 知识库（含向量） |
 | `agents` | Agent 配置 |
 | `sops` | SOP 流程 |
 | `departments` | 部门 |
@@ -155,9 +228,24 @@ open ──→ in_progress ──→ pending ──→ resolved ──→ closed
 | `audit_logs` | 审计日志 |
 | `satisfactions` | 满意度 |
 | `channels` | 渠道配置 |
+| `channel_users` | 渠道用户 |
+| `channel_groups` | 渠道群组 |
 | `webhook_message_records` | 消息记录 |
+| `webhook_configs` | Webhook 配置 |
 | `ticket_watchers` | 工单关注 |
 | `ticket_groups` | 工单-飞书群绑定 |
+| `tags` | 标签 |
+| `ticket_tags` | 工单-标签关联 |
+| `ticket_relations` | 工单关联 |
+| `workflows` | 工作流实例 |
+| `workflow_steps` | 工作流步骤 |
+| `sla_configs` | SLA 配置 |
+| `bot_configs` | Bot 配置 |
+| `menus` | 菜单配置 |
+| `skills` | 技能 |
+| `mcps` | MCP 服务 |
+| `system_configs` | 系统配置 |
+| `assign_configs` | 分配策略 |
 
 #### Workflow 工作流
 

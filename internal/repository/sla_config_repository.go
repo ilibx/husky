@@ -17,10 +17,18 @@ func NewSLAConfigRepository(db *gorm.DB) *SLAConfigRepository {
 	return &SLAConfigRepository{NewBaseRepository(db)}
 }
 
-func (r *SLAConfigRepository) List(ctx context.Context) ([]model.SLAConfig, error) {
+func (r *SLAConfigRepository) List(ctx context.Context, offset, limit int, keyword string) ([]model.SLAConfig, int64, error) {
 	var list []model.SLAConfig
-	err := r.db.WithContext(ctx).Order("priority, category_id").Find(&list).Error
-	return list, err
+	var total int64
+	query := r.db.WithContext(ctx).Model(&model.SLAConfig{})
+	if keyword != "" {
+		query = query.Where("priority ILIKE ?", "%"+keyword+"%")
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order("priority, category_id").Offset(offset).Limit(limit).Find(&list).Error
+	return list, total, err
 }
 
 func (r *SLAConfigRepository) GetByID(ctx context.Context, id uint) (*model.SLAConfig, error) {
@@ -30,6 +38,12 @@ func (r *SLAConfigRepository) GetByID(ctx context.Context, id uint) (*model.SLAC
 		return nil, err
 	}
 	return &c, nil
+}
+
+func (r *SLAConfigRepository) ListAll(ctx context.Context) ([]model.SLAConfig, error) {
+	var list []model.SLAConfig
+	err := r.db.WithContext(ctx).Order("priority, category_id").Find(&list).Error
+	return list, err
 }
 
 func (r *SLAConfigRepository) Create(ctx context.Context, c *model.SLAConfig) error {

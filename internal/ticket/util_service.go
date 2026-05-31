@@ -48,8 +48,8 @@ func (s *service) CreateNotification(ctx context.Context, userID uint, nType, ti
 	return nil
 }
 
-func (s *service) ListNotifications(ctx context.Context, userID uint, offset, limit int) ([]model.Notification, int64, error) {
-	return s.ticketRepo.ListNotifications(ctx, userID, offset, limit)
+func (s *service) ListNotifications(ctx context.Context, userID uint, offset, limit int, keyword string) ([]model.Notification, int64, error) {
+	return s.ticketRepo.ListNotifications(ctx, userID, offset, limit, keyword)
 }
 
 func (s *service) GetUnreadCount(ctx context.Context, userID uint) (int64, error) {

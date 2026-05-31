@@ -29,7 +29,8 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 		return
 	}
 
-	users, total, err := h.userService.List(c.Request.Context(), offset, limit)
+	keyword := c.Query("keyword")
+	users, total, err := h.userService.List(c.Request.Context(), offset, limit, keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

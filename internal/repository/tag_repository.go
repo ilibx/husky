@@ -13,9 +13,13 @@ func (r *TicketRepository) CreateTag(ctx context.Context, tag *model.Tag) error 
 }
 
 // ListTags 获取所有标签
-func (r *TicketRepository) ListTags(ctx context.Context) ([]model.Tag, error) {
+func (r *TicketRepository) ListTags(ctx context.Context, keyword string) ([]model.Tag, error) {
 	var list []model.Tag
-	if err := r.db.WithContext(ctx).Order("name ASC").Find(&list).Error; err != nil {
+	query := r.db.WithContext(ctx).Order("name ASC")
+	if keyword != "" {
+		query = query.Where("name ILIKE ?", "%"+keyword+"%")
+	}
+	if err := query.Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil

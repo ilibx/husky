@@ -16,6 +16,13 @@ type ChannelConfig struct {
 	WebhookURL  string `gorm:"size:500" json:"webhook_url,omitempty"`  // 自定义 Webhook 地址
 	VerifyToken string `gorm:"size:255" json:"verify_token,omitempty"` // 飞书验证令牌
 	EncryptKey  string `gorm:"size:255" json:"encrypt_key,omitempty"`  // 飞书加密 Key
+
+	// 渠道扩展配置
+	WelcomeMsg string `gorm:"type:text" json:"welcome_msg,omitempty"` // 欢迎语（机器人渠道）
+	Signature  string `gorm:"type:text" json:"signature,omitempty"`   // 签名（邮件/机器人渠道）
+	CategoryID *uint  `gorm:"index" json:"category_id,omitempty"`     // 关联分类
+
+	Category *Category `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 }
 
 // CreateChannelConfigRequest 创建渠道配置请求
@@ -29,6 +36,9 @@ type CreateChannelConfigRequest struct {
 	WebhookURL  *string `json:"webhook_url,omitempty"`
 	VerifyToken *string `json:"verify_token,omitempty"`
 	EncryptKey  *string `json:"encrypt_key,omitempty"`
+	WelcomeMsg  *string `json:"welcome_msg,omitempty"`
+	Signature   *string `json:"signature,omitempty"`
+	CategoryID  *uint   `json:"category_id,omitempty"`
 }
 
 // UpdateChannelConfigRequest 更新渠道配置请求
@@ -43,6 +53,9 @@ type UpdateChannelConfigRequest struct {
 	WebhookURL  *string `json:"webhook_url,omitempty"`
 	VerifyToken *string `json:"verify_token,omitempty"`
 	EncryptKey  *string `json:"encrypt_key,omitempty"`
+	WelcomeMsg  *string `json:"welcome_msg,omitempty"`
+	Signature   *string `json:"signature,omitempty"`
+	CategoryID  *uint   `json:"category_id,omitempty"`
 }
 
 // WebhookMessageRecord 渠道消息记录
@@ -64,9 +77,37 @@ type BotConfig struct {
 	WelcomeMsg string `gorm:"type:text" json:"welcome_msg,omitempty"`      // 欢迎语
 	Signature  string `gorm:"type:text" json:"signature,omitempty"`        // 签名
 	Enabled    bool   `gorm:"default:true" json:"enabled"`
+	CategoryID *uint  `json:"category_id,omitempty"`
+
+	Category *Category `gorm:"foreignKey:CategoryID" json:"category,omitempty"`
 }
 
 func (BotConfig) TableName() string { return "bot_configs" }
+
+// ChannelUser 渠道用户
+type ChannelUser struct {
+	Base
+	ChannelType string `gorm:"size:50;not null;index" json:"channel_type"` // lark, dingtalk, wecom
+	ExternalID  string `gorm:"size:255;not null;index" json:"external_id"`
+	Name        string `gorm:"size:255" json:"name"`
+	Avatar      string `gorm:"size:500" json:"avatar"`
+
+	Tags []Tag `gorm:"many2many:channel_user_tags;" json:"tags,omitempty"`
+}
+
+func (ChannelUser) TableName() string { return "channel_users" }
+
+// ChannelGroup 渠道群组
+type ChannelGroup struct {
+	Base
+	ChannelType string `gorm:"size:50;not null;index" json:"channel_type"` // lark, dingtalk, wecom
+	ExternalID  string `gorm:"size:255;not null;index" json:"external_id"`
+	Name        string `gorm:"size:255" json:"name"`
+
+	Tags []Tag `gorm:"many2many:channel_group_tags;" json:"tags,omitempty"`
+}
+
+func (ChannelGroup) TableName() string { return "channel_groups" }
 
 // WebhookConfig Webhook 配置
 type WebhookConfig struct {

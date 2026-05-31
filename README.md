@@ -29,15 +29,16 @@ Husky 是一个基于 Go + GORM + Gin 实现的企业级智能工单处理系统
 - Restful API
 
 ### Admin 管理后台
-- 嵌入式 SPA（单页 HTML/CSS/JS，Go embed 无构建工具链）
+- 嵌入式 SPA（Vue 3 + Element Plus，Go embed 编译进二进制）
 - 仪表盘（工单概览统计图表）
-- 工单管理（CRUD、筛选、详情）
-- 知识库管理
-- Agent 配置管理
-- SOP 流程管理
+- 工单管理（CRUD、筛选、详情、标签、评论）
+- 资料管理（文档管理 / 向量库配置 / 资料检索）
+- Agent 配置管理 / SOP 流程管理 / Skill 管理 / MCP 服务
 - Workflow 工作流跟踪
-- 用户管理
-- 部门/分类/渠道配置
+- 通知管理（通知中心 / SLA 配置）
+- 系统管理（用户/角色/部门/分类/标签/菜单管理）
+- 渠道管理（渠道配置、渠道用户、渠道群组）
+- 大模型管理（系统配置）
 
 ### 安全与权限
 - JWT Token 认证 + Token 刷新
@@ -191,19 +192,21 @@ husky/
 │   └── migrate/           # 独立数据库迁移工具（SQL 脚本）
 ├── internal/              # 私有应用代码
 │   ├── admin/             # Admin 管理 UI（Go embed SPA）
+│   ├── agent/             # Agent 引擎 + SOP 工作流
+│   ├── channel/           # 渠道管理（用户/群组/配置）
 │   ├── config/            # 配置管理（环境变量）
 │   ├── database/          # 数据库连接 + GORM AutoMigrate
+│   ├── gateway/           # 渠道网关（统一入口 + 用户富化）
 │   ├── handler/           # HTTP 处理器
+│   ├── intent/            # 用户意图识别
+│   ├── knowledge/         # 知识库服务
+│   ├── ldap/              # LDAP 同步服务
 │   ├── middleware/        # 中间件（CORS、认证、RBAC）
 │   ├── model/             # GORM 数据模型
 │   ├── repository/        # 数据访问层
 │   ├── router/            # 路由定义 + 服务注入
+│   ├── ticket/            # 工单服务（含 SLA/Workflow 配置）
 │   └── service/           # 业务逻辑层
-│       ├── agent_engine.go    # Agent 执行引擎
-│       ├── workflow_service.go # ReAct + SOP 工作流
-│       ├── ticket_service.go  # 工单服务
-│       ├── knowledge.go       # 知识库服务
-│       └── ...
 ├── pkg/                   # 公共库代码
 │   ├── cache/             # Redis / Noop 缓存
 │   ├── errors/            # 错误处理
@@ -323,6 +326,8 @@ Agent 匹配规则支持按触发事件（ticket_created/ticket_updated/any）�
 | POST/GET | `/api/v1/tickets/:id/comments` | 评论 |
 | POST/GET/DELETE | `/api/v1/tickets/:id/attachments` | 附件 |
 | POST/DELETE | `/api/v1/tickets/:id/watch` | 关注 |
+| GET/PUT | `/api/v1/tickets/:id/tags` | 工单标签管理 |
+| POST | `/api/v1/tickets/:id/relations` | 工单关联 |
 
 ### 知识库
 | 方法 | 路径 | 说明 |
@@ -332,6 +337,8 @@ Agent 匹配规则支持按触发事件（ticket_created/ticket_updated/any）�
 | POST | `/api/v1/knowledge/search` | 向量搜索 |
 | POST/GET | `/api/v1/knowledge/import` | 批量导入 |
 | GET | `/api/v1/knowledge/export` | 批量导出 |
+| GET | `/api/v1/knowledge/recommend` | 推荐知识 |
+| GET | `/api/v1/knowledge/categories` | 知识库分类 |
 
 ### Agent
 | 方法 | 路径 | 说明 |
@@ -353,6 +360,28 @@ Agent 匹配规则支持按触发事件（ticket_created/ticket_updated/any）�
 | POST | `/api/v1/workflows/steps/:stepId/complete` | 完成人工步骤 |
 | GET | `/api/v1/workflows/tasks` | 当前用户的待办步骤 |
 
+### 标签
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/v1/tags` | 列表/创建 |
+| GET/PUT/DELETE | `/api/v1/tags/:id` | 详情/更新/删除 |
+
+### 渠道
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/api/v1/channels` | 列表/创建 |
+| GET/PUT/DELETE | `/api/v1/channels/:id` | 详情/更新/删除 |
+| GET/POST/PUT/DELETE | `/api/v1/channel-users` | 渠道用户管理 |
+| GET/POST/PUT/DELETE | `/api/v1/channel-groups` | 渠道群组管理 |
+| GET/POST | `/api/v1/channels/:channel/bot-config` | Bot 配置 |
+
+### 菜单管理
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/menus` | 当前用户菜单树 |
+| GET/POST | `/api/v1/menus/all` | 全部菜单（管理员） |
+| GET/PUT/DELETE | `/api/v1/menus/:id` | 详情/更新/删除 |
+
 ### 其他
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -361,7 +390,15 @@ Agent 匹配规则支持按触发事件（ticket_created/ticket_updated/any）�
 | GET | `/api/v1/departments` | 部门树 |
 | GET | `/api/v1/categories` | 分类列表 |
 | GET/PUT | `/api/v1/notifications` | 通知 |
+| GET | `/api/v1/notifications/unread-count` | 未读通知数 |
+| GET/POST | `/api/v1/sla-configs` | SLA 配置管理 |
+| GET/POST | `/api/v1/webhook-configs` | Webhook 配置管理 |
+| GET/POST/PUT/DELETE | `/api/v1/roles` | 角色管理 |
+| GET/POST | `/api/v1/assign-config` | 分配策略配置 |
+| GET/POST/PUT/DELETE | `/api/v1/skills` | Skill 管理 |
+| GET/POST/PUT/DELETE | `/api/v1/mcps` | MCP 服务管理 |
 | GET | `/api/v1/stats/*` | 统计报表 |
+| GET/POST | `/api/v1/system-config` | 系统配置 |
 | POST | `/webhooks/lark` | 飞书 Webhook |
 | POST | `/webhooks/dingtalk` | 钉钉 Webhook |
 | POST | `/webhooks/wecom` | 企微 Webhook |

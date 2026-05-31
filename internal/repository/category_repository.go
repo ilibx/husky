@@ -32,9 +32,13 @@ func (r *CategoryRepository) GetByID(ctx context.Context, id uint) (*model.Categ
 	return &cat, nil
 }
 
-func (r *CategoryRepository) List(ctx context.Context) ([]model.Category, error) {
+func (r *CategoryRepository) List(ctx context.Context, keyword string) ([]model.Category, error) {
 	var list []model.Category
-	err := r.db.WithContext(ctx).Order("sort_order ASC, id ASC").Find(&list).Error
+	query := r.db.WithContext(ctx).Order("sort_order ASC, id ASC")
+	if keyword != "" {
+		query = query.Where("name ILIKE ?", "%"+keyword+"%")
+	}
+	err := query.Find(&list).Error
 	return list, err
 }
 

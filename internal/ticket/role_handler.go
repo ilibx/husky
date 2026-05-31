@@ -12,7 +12,8 @@ import (
 // --- Roles ---
 
 func (h *TicketHandler) ListRoles(c *gin.Context) {
-	roles, err := h.ticketService.ListRoles(c.Request.Context())
+	keyword := c.Query("keyword")
+	roles, err := h.ticketService.ListRoles(c.Request.Context(), keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

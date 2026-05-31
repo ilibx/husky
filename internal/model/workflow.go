@@ -40,8 +40,9 @@ type WorkflowStep struct {
 	StartedAt   *time.Time `json:"started_at,omitempty"`
 	CompletedAt *time.Time `json:"completed_at,omitempty"`
 
-	Assignee *User  `gorm:"foreignKey:AssigneeID" json:"assignee,omitempty"`
-	Agent    *Agent `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
+	Workflow *Workflow `gorm:"foreignKey:WorkflowID" json:"workflow,omitempty"`
+	Assignee *User     `gorm:"foreignKey:AssigneeID" json:"assignee,omitempty"`
+	Agent    *Agent    `gorm:"foreignKey:AgentID" json:"agent,omitempty"`
 }
 
 func (Workflow) TableName() string { return "workflows" }

@@ -10,7 +10,7 @@ import (
 
 // UserService 用户管理服务接口
 type UserService interface {
-	List(ctx context.Context, offset, limit int) ([]model.User, int64, error)
+	List(ctx context.Context, offset, limit int, keyword string) ([]model.User, int64, error)
 	GetByID(ctx context.Context, id uint) (*model.User, error)
 	Update(ctx context.Context, id uint, req *model.UpdateUserRequest) (*model.User, error)
 	Delete(ctx context.Context, id uint) error
@@ -26,8 +26,8 @@ func NewUserService(userRepo *repository.UserRepository) UserService {
 	return &userService{userRepo: userRepo}
 }
 
-func (s *userService) List(ctx context.Context, offset, limit int) ([]model.User, int64, error) {
-	return s.userRepo.List(ctx, offset, limit)
+func (s *userService) List(ctx context.Context, offset, limit int, keyword string) ([]model.User, int64, error) {
+	return s.userRepo.List(ctx, offset, limit, keyword)
 }
 
 func (s *userService) GetByID(ctx context.Context, id uint) (*model.User, error) {

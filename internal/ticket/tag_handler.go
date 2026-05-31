@@ -31,7 +31,8 @@ func (h *TicketHandler) CreateTag(c *gin.Context) {
 }
 
 func (h *TicketHandler) ListTags(c *gin.Context) {
-	tags, err := h.ticketService.ListTags(c.Request.Context())
+	keyword := c.Query("keyword")
+	tags, err := h.ticketService.ListTags(c.Request.Context(), keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

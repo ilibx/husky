@@ -28,8 +28,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/departments', { params: { page: page.value, page_size: pageSize.value } })
-    departments.value = res.data?.list || res.data || []
-    total.value = res.data?.total || res.total || 0
+    departments.value = res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch {
     departments.value = []
   } finally {
@@ -40,7 +40,7 @@ async function fetchData() {
 async function fetchParentOptions() {
   try {
     const res: any = await request.get('/departments')
-    parentOptions.value = res.data?.list || res.data || []
+    parentOptions.value = res.data?.data || res.data || []
   } catch {
     parentOptions.value = []
   }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import request from '@/api/request'
 
@@ -9,10 +9,6 @@ interface Ticket {
   description?: string; sla_status?: string; due_at?: string
 }
 interface Tag { id: number; name: string; color: string }
-interface TicketField {
-  id: number; name: string; field_key: string; field_type: string; options: string
-  required: boolean; sort_order: number; placeholder: string; enabled: boolean
-}
 interface Category { id: number; name: string }
 
 const list = ref<Ticket[]>([])
@@ -25,46 +21,31 @@ const detailVisible = ref(false)
 const detail = ref<any>(null)
 const commentContent = ref('')
 const commentInternal = ref(false)
-const detailFieldValues = ref<Record<string, string>>({})
-
 const allTags = ref<Tag[]>([])
 const tagSelectVisible = ref(false)
 const selectedTagIDs = ref<number[]>([])
 
-const ticketFields = ref<TicketField[]>([])
 const categories = ref<Category[]>([])
 
 const createVisible = ref(false)
 const createForm = ref({ title: '', description: '', priority: 'medium', category_id: null as number | null })
-const createFieldVals = ref<Record<string, string>>({})
-
 const editVisible = ref(false)
 const editId = ref(0)
 const editForm = ref({ title: '', description: '', priority: 'medium', category_id: null as number | null })
-const editFieldVals = ref<Record<string, string>>({})
-
-const sortedFields = computed(() =>
-  [...ticketFields.value].filter(f => f.enabled).sort((a, b) => a.sort_order - b.sort_order)
-)
-
 async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/tickets', { params: { page: page.value, page_size: pageSize.value } })
-    list.value = res.data?.list || res.data || []
-    total.value = res.data?.total || res.total || 0
+    list.value = res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch { list.value = [] }
   finally { loading.value = false }
 }
 
 async function fetchMeta() {
   try {
-    const [fRes, cRes] = await Promise.all([
-      request.get('/tickets/fields/definitions'),
-      request.get('/categories'),
-    ])
-    ticketFields.value = fRes.data || []
-    categories.value = cRes.data || []
+    const res: any = await request.get('/categories')
+    categories.value = res.data?.data || res.data || []
   } catch { /* ignore */ }
 }
 
@@ -79,17 +60,8 @@ async function viewDetail(row: Ticket) {
     commentContent.value = ''
     commentInternal.value = false
     detailVisible.value = true
-    await Promise.all([fetchTags(), fetchDetailFields(row.id)])
+    await fetchTags()
   } catch { ElMessage.error('获取工单详情失败') }
-}
-
-async function fetchDetailFields(ticketId: number) {
-  try {
-    const res: any = await request.get(`/tickets/${ticketId}/fields`)
-    const vals: Record<string, string> = {}
-    ;(res.data || []).forEach((fv: any) => { vals[String(fv.field_id)] = fv.value })
-    detailFieldValues.value = vals
-  } catch { detailFieldValues.value = {} as Record<string, string> }
 }
 
 async function fetchTags() {
@@ -143,8 +115,7 @@ async function removeTag(tagId: number) {
 }
 
 function openCreate() {
-    createForm.value = { title: '', description: '', priority: 'medium', category_id: null }
-  createFieldVals.value = {}
+  createForm.value = { title: '', description: '', priority: 'medium', category_id: null }
   createVisible.value = true
 }
 
@@ -157,9 +128,7 @@ async function handleCreate() {
       priority: createForm.value.priority,
     }
     if (createForm.value.category_id !== null) payload.category_id = createForm.value.category_id
-    const res: any = await request.post('/tickets', payload)
-    const ticketId = res.data?.id || res.id
-    await saveFieldValues(ticketId, createFieldVals.value)
+    await request.post('/tickets', payload)
     ElMessage.success('创建成功')
     createVisible.value = false
     fetchData()
@@ -174,12 +143,6 @@ function openEdit(row: Ticket) {
     priority: row.priority || 'medium',
     category_id: row.category_id ?? null,
   }
-  editFieldVals.value = {}
-  request.get(`/tickets/${row.id}/fields`).then((res: any) => {
-    const vals: Record<string, string> = {}
-    ;(res.data || []).forEach((fv: any) => { vals[String(fv.field_id)] = fv.value })
-    editFieldVals.value = vals
-  }).catch(() => { /* ignore */ })
   editVisible.value = true
 }
 
@@ -193,19 +156,10 @@ async function handleEdit() {
     }
     if (editForm.value.category_id !== null) payload.category_id = editForm.value.category_id
     await request.put(`/tickets/${editId.value}`, payload)
-    await saveFieldValues(editId.value, editFieldVals.value)
     ElMessage.success('更新成功')
     editVisible.value = false
     fetchData()
   } catch { /* handled by interceptor */ }
-}
-
-async function saveFieldValues(ticketId: number, vals: Record<string, string>) {
-  const entries = Object.entries(vals).filter(([_, v]) => v !== '' && v !== undefined && v !== null)
-  if (entries.length === 0) return
-  await request.put(`/tickets/${ticketId}/fields`, entries.map(([fieldId, value]) => ({
-    ticket_id: ticketId, field_id: Number(fieldId), value: String(value),
-  })))
 }
 
 async function handleDelete(id: number) {
@@ -217,18 +171,15 @@ async function handleDelete(id: number) {
   } catch { /* cancelled or error */ }
 }
 
-function fieldComponent(field: TicketField) {
-  const map: Record<string, string> = { text: 'el-input', textarea: 'el-input', select: 'el-select', multi_select: 'el-select', number: 'el-input-number', date: 'el-date-picker', boolean: 'el-switch' }
-  return map[field.field_type] || 'el-input'
-}
-
-function fieldOptions(field: TicketField): string[] {
-  try { return JSON.parse(field.options || '[]') } catch { return [] }
-}
-
-const statusOptions = ['open', 'in_progress', 'pending', 'resolved', 'closed']
-const statusMap: Record<string, string> = { open: 'info', in_progress: 'primary', pending: 'warning', resolved: 'success', closed: '' }
-function statusTag(s: string) { return (statusMap[s] || 'info') as 'info' | 'primary' | 'success' | 'warning' | 'danger' | '' }
+const statusOptions = [
+  { label: '待处理', value: 'open' },
+  { label: '处理中', value: 'in_progress' },
+  { label: '待确认', value: 'pending' },
+  { label: '已解决', value: 'resolved' },
+  { label: '已关闭', value: 'closed' },
+]
+const statusTypeMap: Record<string, string> = { open: 'info', in_progress: 'primary', pending: 'warning', resolved: 'success', closed: '' }
+function statusTag(s: string) { return (statusTypeMap[s] || 'info') as 'info' | 'primary' | 'success' | 'warning' | 'danger' | '' }
 
 const priorityMap: Record<string, string> = { low: 'info', medium: 'warning', high: 'danger', urgent: 'danger' }
 function priorityTag(p: string) { return (priorityMap[p] || 'info') as 'info' | 'primary' | 'success' | 'warning' | 'danger' }
@@ -246,7 +197,7 @@ onMounted(() => { fetchData(); fetchMeta() })
 <template>
   <div>
     <div class="page-header">
-      <h2>工单管理</h2>
+      <h2>全部工单</h2>
       <el-button type="primary" @click="openCreate">新建工单</el-button>
     </div>
 
@@ -258,7 +209,7 @@ onMounted(() => { fetchData(); fetchMeta() })
         <el-table-column prop="status" label="状态" width="140">
           <template #default="{ row }">
             <el-select :model-value="row.status" size="small" style="width: 110px" @change="(v: string) => updateStatus(row.id, v)">
-              <el-option v-for="s in statusOptions" :key="s" :label="s" :value="s" />
+              <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
             </el-select>
           </template>
         </el-table-column>
@@ -316,34 +267,6 @@ onMounted(() => { fetchData(); fetchMeta() })
           </el-select>
         </el-form-item>
 
-        <el-divider v-if="sortedFields.length > 0" />
-        <template v-for="f in sortedFields" :key="f.id">
-          <el-form-item :label="f.name" v-if="f.field_type === 'text'">
-            <el-input v-model="createFieldVals[String(f.id)]" :placeholder="f.placeholder || f.name" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'textarea'">
-            <el-input v-model="createFieldVals[String(f.id)]" type="textarea" :rows="3" :placeholder="f.placeholder || f.name" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'select'">
-            <el-select v-model="createFieldVals[String(f.id)]" :placeholder="f.placeholder || '请选择'" clearable>
-              <el-option v-for="o in fieldOptions(f)" :key="o" :label="o" :value="o" />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'multi_select'">
-            <el-select v-model="createFieldVals[String(f.id)]" multiple collapse-tags :placeholder="f.placeholder || '请选择'">
-              <el-option v-for="o in fieldOptions(f)" :key="o" :label="o" :value="o" />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'number'">
-            <el-input v-model="createFieldVals[String(f.id)]" type="number" :placeholder="f.placeholder || f.name" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'date'">
-            <el-date-picker v-model="createFieldVals[String(f.id)]" type="date" style="width:100%" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'boolean'">
-            <el-switch v-model="createFieldVals[String(f.id)]" :active-value="'true'" :inactive-value="'false'" />
-          </el-form-item>
-        </template>
       </el-form>
       <template #footer>
         <el-button @click="createVisible = false">取消</el-button>
@@ -374,34 +297,6 @@ onMounted(() => { fetchData(); fetchMeta() })
           </el-select>
         </el-form-item>
 
-        <el-divider v-if="sortedFields.length > 0" />
-        <template v-for="f in sortedFields" :key="f.id">
-          <el-form-item :label="f.name" v-if="f.field_type === 'text'">
-            <el-input v-model="editFieldVals[String(f.id)]" :placeholder="f.placeholder || f.name" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'textarea'">
-            <el-input v-model="editFieldVals[String(f.id)]" type="textarea" :rows="3" :placeholder="f.placeholder || f.name" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'select'">
-            <el-select v-model="editFieldVals[String(f.id)]" :placeholder="f.placeholder || '请选择'" clearable>
-              <el-option v-for="o in fieldOptions(f)" :key="o" :label="o" :value="o" />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'multi_select'">
-            <el-select v-model="editFieldVals[String(f.id)]" multiple collapse-tags :placeholder="f.placeholder || '请选择'">
-              <el-option v-for="o in fieldOptions(f)" :key="o" :label="o" :value="o" />
-            </el-select>
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'number'">
-            <el-input v-model="editFieldVals[String(f.id)]" type="number" :placeholder="f.placeholder || f.name" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'date'">
-            <el-date-picker v-model="editFieldVals[String(f.id)]" type="date" style="width:100%" />
-          </el-form-item>
-          <el-form-item :label="f.name" v-else-if="f.field_type === 'boolean'">
-            <el-switch v-model="editFieldVals[String(f.id)]" :active-value="'true'" :inactive-value="'false'" />
-          </el-form-item>
-        </template>
       </el-form>
       <template #footer>
         <el-button @click="editVisible = false">取消</el-button>
@@ -414,9 +309,9 @@ onMounted(() => { fetchData(); fetchMeta() })
       <el-descriptions :column="2" border>
         <el-descriptions-item label="工单号">{{ detail.ticket_no }}</el-descriptions-item>
         <el-descriptions-item label="状态">
-          <el-select :model-value="detail.status" size="small" @change="(v: string) => updateStatus(detail.id, v)">
-            <el-option v-for="s in statusOptions" :key="s" :label="s" :value="s" />
-          </el-select>
+            <el-select :model-value="detail.status" size="small" @change="(v: string) => updateStatus(detail.id, v)">
+              <el-option v-for="s in statusOptions" :key="s.value" :label="s.label" :value="s.value" />
+            </el-select>
         </el-descriptions-item>
         <el-descriptions-item label="标题" :span="2">{{ detail.title }}</el-descriptions-item>
         <el-descriptions-item label="描述" :span="2">{{ detail.description }}</el-descriptions-item>
@@ -431,23 +326,6 @@ onMounted(() => { fetchData(); fetchMeta() })
         <el-descriptions-item label="处理人">{{ detail.assignee_name || '-' }}</el-descriptions-item>
         <el-descriptions-item label="创建时间">{{ detail.created_at }}</el-descriptions-item>
       </el-descriptions>
-
-      <el-divider v-if="sortedFields.length > 0" />
-      <template v-if="sortedFields.length > 0">
-        <h4>自定义字段</h4>
-        <el-descriptions :column="2" border style="margin-top:8px">
-          <el-descriptions-item v-for="f in sortedFields" :key="f.id" :label="f.name">
-            <template v-if="f.field_type === 'boolean'">
-              <el-tag :type="detailFieldValues[String(f.id)] === 'true' ? 'success' : 'info'">
-                {{ detailFieldValues[String(f.id)] === 'true' ? '是' : '否' }}
-              </el-tag>
-            </template>
-            <template v-else>
-              {{ detailFieldValues[String(f.id)] || '-' }}
-            </template>
-          </el-descriptions-item>
-        </el-descriptions>
-      </template>
 
       <el-divider />
       <div class="section-header">

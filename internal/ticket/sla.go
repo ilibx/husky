@@ -78,8 +78,19 @@ func (e *SLAEscalator) escalateTicket(ctx context.Context, ticket *model.Ticket)
 	}
 
 	now := time.Now()
-	isWarning := ticket.SLAStatus == "normal" && now.After(ticket.DueAt.Add(-30*time.Minute))
 	isBreached := now.After(*ticket.DueAt)
+
+	var resolutionMinutes float64 = 480
+	var warningThreshold float64 = 0.8
+	if e.slaSvc != nil {
+		if cfg, err := e.slaSvc.FindMatch(ctx, ticket.Priority, &ticket.CategoryID); err == nil && cfg != nil {
+			resolutionMinutes = float64(cfg.ResolutionMinutes)
+			warningThreshold = cfg.WarningThreshold
+		}
+	}
+
+	warningMinutes := resolutionMinutes * (1 - warningThreshold)
+	isWarning := ticket.SLAStatus == "normal" && now.After(ticket.DueAt.Add(-time.Duration(warningMinutes)*time.Minute))
 
 	var newStatus string
 	var eventType string

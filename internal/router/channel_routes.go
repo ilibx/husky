@@ -33,3 +33,21 @@ func setupWebhookRoutes(group *gin.RouterGroup, h *channel.Handler) {
 func setupFeishuGroupRoutes(group *gin.RouterGroup, h *channel.Handler) {
 	group.POST("/join-group", h.JoinGroup)
 }
+
+func setupChannelUserRoutes(group *gin.RouterGroup, h *channel.ChannelUserHandler) {
+	group.GET("", h.List)
+	group.GET("/:id", h.Get)
+	group.POST("", auth.RBACMiddleware("admin"), h.Create)
+	group.PUT("/:id", auth.RBACMiddleware("admin"), h.Update)
+	group.DELETE("/:id", auth.RBACMiddleware("admin"), h.Delete)
+	group.PUT("/:id/tags", auth.RBACMiddleware("admin"), h.UpdateTags)
+}
+
+func setupChannelGroupRoutes(group *gin.RouterGroup, h *channel.ChannelGroupHandler) {
+	group.GET("", h.List)
+	group.GET("/:id", h.Get)
+	group.POST("", auth.RBACMiddleware("admin"), h.Create)
+	group.PUT("/:id", auth.RBACMiddleware("admin"), h.Update)
+	group.DELETE("/:id", auth.RBACMiddleware("admin"), h.Delete)
+	group.PUT("/:id/tags", auth.RBACMiddleware("admin"), h.UpdateTags)
+}

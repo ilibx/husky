@@ -10,12 +10,19 @@ func (r *TicketRepository) CreateNotification(ctx context.Context, n *model.Noti
 	return r.db.WithContext(ctx).Create(n).Error
 }
 
-// ListNotifications 获取用户通知列表
-func (r *TicketRepository) ListNotifications(ctx context.Context, userID uint, offset, limit int) ([]model.Notification, int64, error) {
+// ListNotifications 获取通知列表
+// userID=0 返回所有通知（管理员）, 否则返回指定用户的通知
+func (r *TicketRepository) ListNotifications(ctx context.Context, userID uint, offset, limit int, keyword string) ([]model.Notification, int64, error) {
 	var list []model.Notification
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.Notification{}).Where("user_id = ?", userID)
+	query := r.db.WithContext(ctx).Model(&model.Notification{})
+	if userID > 0 {
+		query = query.Where("user_id = ?", userID)
+	}
+	if keyword != "" {
+		query = query.Where("title ILIKE ?", "%"+keyword+"%")
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -31,9 +38,12 @@ func (r *TicketRepository) ListNotifications(ctx context.Context, userID uint, o
 // GetUnreadNotificationCount 获取未读通知数
 func (r *TicketRepository) GetUnreadNotificationCount(ctx context.Context, userID uint) (int64, error) {
 	var count int64
-	err := r.db.WithContext(ctx).Model(&model.Notification{}).
-		Where("user_id = ? AND is_read = ?", userID, false).
-		Count(&count).Error
+	query := r.db.WithContext(ctx).Model(&model.Notification{}).
+		Where("is_read = ?", false)
+	if userID > 0 {
+		query = query.Where("user_id = ?", userID)
+	}
+	err := query.Count(&count).Error
 	return count, err
 }
 

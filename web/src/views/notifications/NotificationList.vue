@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
 
 interface Notification {
   id: number
@@ -17,12 +18,16 @@ interface Notification {
 }
 
 const router = useRouter()
+const userStore = useUserStore()
+const isAdmin = computed(() => userStore.userInfo?.role === 'admin')
+
 const notifications = ref<Notification[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 const typeFilter = ref('')
+const showAll = ref(true)
 const unreadCount = ref(0)
 
 const typeOptions = [
@@ -45,9 +50,10 @@ async function fetchData() {
   try {
     const params: Record<string, any> = { page: page.value, page_size: pageSize.value }
     if (typeFilter.value) params.type = typeFilter.value
+    if (isAdmin.value && !showAll.value) params.scope = 'mine'
     const res: any = await request.get('/notifications', { params })
-    notifications.value = res.data?.list || res.data || []
-    total.value = res.data?.total || res.total || 0
+    notifications.value = res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch {
     notifications.value = []
   } finally {
@@ -79,12 +85,8 @@ async function markAsRead(row: Notification) {
 async function markAllRead() {
   try {
     await ElMessageBox.confirm('确认将所有通知标记为已读？', '提示')
-    const unreadList = notifications.value.filter(n => !n.is_read)
-    for (const n of unreadList) {
-      await request.put(`/notifications/${n.id}/read`, {})
-      n.is_read = true
-      n.status = 'read'
-    }
+    await request.put('/notifications/all/read', {})
+    fetchData()
     unreadCount.value = 0
     ElMessage.success('全部标记为已读')
   } catch {
@@ -115,7 +117,7 @@ onMounted(() => {
   <div>
     <div class="page-header">
       <h2>
-        通知中心
+        通知列表
         <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="unread-badge">
           <span />
         </el-badge>
@@ -124,6 +126,9 @@ onMounted(() => {
         <el-select v-model="typeFilter" placeholder="通知类型" clearable style="width: 160px; margin-right: 12px;" @change="onTypeChange">
           <el-option v-for="opt in typeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
         </el-select>
+        <el-button v-if="isAdmin" :type="showAll ? 'primary' : 'default'" size="small" style="margin-right: 8px;" @click="showAll = !showAll; onTypeChange()">
+          {{ showAll ? '所有通知' : '我的通知' }}
+        </el-button>
         <el-button type="primary" @click="markAllRead" :disabled="unreadCount === 0">全部标记已读</el-button>
       </div>
     </div>

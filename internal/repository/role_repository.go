@@ -32,9 +32,13 @@ func (r *TicketRepository) GetRolePermissions(ctx context.Context, roleName stri
 }
 
 // ListRoles 获取所有角色
-func (r *TicketRepository) ListRoles(ctx context.Context) ([]model.Role, error) {
+func (r *TicketRepository) ListRoles(ctx context.Context, keyword string) ([]model.Role, error) {
 	var list []model.Role
-	if err := r.db.WithContext(ctx).Order("name ASC").Find(&list).Error; err != nil {
+	query := r.db.WithContext(ctx).Order("name ASC")
+	if keyword != "" {
+		query = query.Where("name ILIKE ?", "%"+keyword+"%")
+	}
+	if err := query.Find(&list).Error; err != nil {
 		return nil, err
 	}
 	return list, nil

@@ -22,7 +22,14 @@ func (h *Handler) ListNotifications(c *gin.Context) {
 		return
 	}
 
-	list, total, err := h.querySvc.ListNotifications(c.Request.Context(), uid, offset, limit)
+	role, _ := c.Get("role")
+	isAdmin := role == "admin"
+	listUserID := uid
+	if isAdmin && c.Query("scope") != "mine" {
+		listUserID = 0
+	}
+
+	list, total, err := h.querySvc.ListNotifications(c.Request.Context(), listUserID, offset, limit, c.Query("keyword"))
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
@@ -42,7 +49,14 @@ func (h *Handler) GetUnreadCount(c *gin.Context) {
 		return
 	}
 
-	count, err := h.querySvc.GetUnreadCount(c.Request.Context(), uid)
+	role, _ := c.Get("role")
+	isAdmin := role == "admin"
+	countUserID := uid
+	if isAdmin && c.Query("scope") != "mine" {
+		countUserID = 0
+	}
+
+	count, err := h.querySvc.GetUnreadCount(c.Request.Context(), countUserID)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

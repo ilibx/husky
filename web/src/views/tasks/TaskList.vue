@@ -54,8 +54,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/workflows/tasks', { params: { page: page.value, page_size: pageSize.value } })
-    list.value = res.data || []
-    total.value = res.total || 0
+    list.value = res.data?.data || []
+    total.value = res.data?.total || 0
   } catch {
     list.value = []
   } finally {

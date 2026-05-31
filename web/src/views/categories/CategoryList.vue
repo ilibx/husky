@@ -149,7 +149,7 @@ async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/categories')
-    flatList.value = res.data || []
+    flatList.value = res.data?.data || []
   } catch {
     flatList.value = []
   } finally {

@@ -66,14 +66,18 @@ func (r *UserRepository) Delete(ctx context.Context, id uint) error {
 }
 
 // List 获取用户列表
-func (r *UserRepository) List(ctx context.Context, offset, limit int) ([]model.User, int64, error) {
+func (r *UserRepository) List(ctx context.Context, offset, limit int, keyword string) ([]model.User, int64, error) {
 	var users []model.User
 	var total int64
 
-	if err := r.db.WithContext(ctx).Model(&model.User{}).Count(&total).Error; err != nil {
+	query := r.db.WithContext(ctx).Model(&model.User{})
+	if keyword != "" {
+		query = query.Where("username ILIKE ? OR nickname ILIKE ? OR email ILIKE ?", "%"+keyword+"%", "%"+keyword+"%", "%"+keyword+"%")
+	}
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	err := r.db.WithContext(ctx).Offset(offset).Limit(limit).Find(&users).Error
+	err := query.Offset(offset).Limit(limit).Find(&users).Error
 	return users, total, err
 }

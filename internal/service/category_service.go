@@ -12,7 +12,7 @@ import (
 type CategoryService interface {
 	Create(ctx context.Context, req *model.CreateCategoryRequest) (*model.Category, error)
 	GetByID(ctx context.Context, id uint) (*model.Category, error)
-	List(ctx context.Context) ([]model.Category, error)
+	List(ctx context.Context, keyword string) ([]model.Category, error)
 	Update(ctx context.Context, id uint, req *model.UpdateCategoryRequest) (*model.Category, error)
 	Delete(ctx context.Context, id uint) error
 }
@@ -64,8 +64,8 @@ func (s *categoryService) GetByID(ctx context.Context, id uint) (*model.Category
 	return cat, nil
 }
 
-func (s *categoryService) List(ctx context.Context) ([]model.Category, error) {
-	return s.catRepo.List(ctx)
+func (s *categoryService) List(ctx context.Context, keyword string) ([]model.Category, error) {
+	return s.catRepo.List(ctx, keyword)
 }
 
 func (s *categoryService) Update(ctx context.Context, id uint, req *model.UpdateCategoryRequest) (*model.Category, error) {

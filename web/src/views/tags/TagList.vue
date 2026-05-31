@@ -24,8 +24,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/tags', { params: { page: page.value, page_size: pageSize.value } })
-    tags.value = res.data?.list || res.data || []
-    total.value = res.data?.total || res.total || 0
+    tags.value = res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch {
     tags.value = []
   } finally {

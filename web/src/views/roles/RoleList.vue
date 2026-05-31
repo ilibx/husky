@@ -26,8 +26,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/roles', { params: { page: page.value, page_size: pageSize.value } })
-    roles.value = res.data?.list || res.data || []
-    total.value = res.data?.total || res.total || 0
+    roles.value = res.data?.data || res.data || []
+    total.value = res.data?.total || 0
   } catch {
     roles.value = []
   } finally {

@@ -18,8 +18,8 @@ func (s *service) CreateTag(ctx context.Context, name, color string) (*model.Tag
 	return tag, nil
 }
 
-func (s *service) ListTags(ctx context.Context) ([]model.Tag, error) {
-	return s.ticketRepo.ListTags(ctx)
+func (s *service) ListTags(ctx context.Context, keyword string) ([]model.Tag, error) {
+	return s.ticketRepo.ListTags(ctx, keyword)
 }
 
 func (s *service) GetTag(ctx context.Context, id uint) (*model.Tag, error) {

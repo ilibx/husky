@@ -65,7 +65,7 @@ type AuditLogService interface {
 
 type NotificationService interface {
 	CreateNotification(ctx context.Context, userID uint, nType, title, content string, refID uint, refType string) error
-	ListNotifications(ctx context.Context, userID uint, offset, limit int) ([]model.Notification, int64, error)
+	ListNotifications(ctx context.Context, userID uint, offset, limit int, keyword string) ([]model.Notification, int64, error)
 	GetUnreadCount(ctx context.Context, userID uint) (int64, error)
 	MarkNotificationRead(ctx context.Context, id, userID uint) error
 	MarkAllNotificationsRead(ctx context.Context, userID uint) error
@@ -78,7 +78,7 @@ type WebhookService interface {
 
 type TagService interface {
 	CreateTag(ctx context.Context, name, color string) (*model.Tag, error)
-	ListTags(ctx context.Context) ([]model.Tag, error)
+	ListTags(ctx context.Context, keyword string) ([]model.Tag, error)
 	GetTag(ctx context.Context, id uint) (*model.Tag, error)
 	UpdateTag(ctx context.Context, tag *model.Tag) error
 	DeleteTag(ctx context.Context, id uint) error
@@ -100,7 +100,7 @@ type RelationService interface {
 }
 
 type RoleService interface {
-	ListRoles(ctx context.Context) ([]model.Role, error)
+	ListRoles(ctx context.Context, keyword string) ([]model.Role, error)
 	GetRole(ctx context.Context, id uint) (*model.Role, error)
 	CreateRole(ctx context.Context, role *model.Role) error
 	UpdateRole(ctx context.Context, role *model.Role) error
@@ -108,12 +108,6 @@ type RoleService interface {
 }
 
 type FieldService interface {
-	ListTicketFields(ctx context.Context) ([]model.TicketField, error)
-	CreateTicketField(ctx context.Context, req *model.CreateTicketFieldRequest) (*model.TicketField, error)
-	UpdateTicketField(ctx context.Context, id uint, req *model.UpdateTicketFieldRequest) (*model.TicketField, error)
-	DeleteTicketField(ctx context.Context, id uint) error
-	UpdateTicketFieldValues(ctx context.Context, ticketID uint, values []model.TicketFieldValue) error
-	GetTicketFieldValues(ctx context.Context, ticketID uint) ([]model.TicketFieldValue, error)
 }
 
 type BotConfigService interface {

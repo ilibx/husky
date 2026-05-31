@@ -12,12 +12,17 @@ import (
 // --- SLA Config ---
 
 func (h *TicketHandler) ListSLAConfigs(c *gin.Context) {
-	list, err := h.slaConfigSvc.List(c.Request.Context())
+	offset, limit, ok := httputil.ParsePagination(c)
+	if !ok {
+		return
+	}
+	keyword := c.Query("keyword")
+	list, total, err := h.slaConfigSvc.List(c.Request.Context(), offset, limit, keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
-	httputil.Success(c, gin.H{"data": list})
+	httputil.Success(c, gin.H{"data": list, "total": total})
 }
 
 func (h *TicketHandler) GetSLAConfig(c *gin.Context) {

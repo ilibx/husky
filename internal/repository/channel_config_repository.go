@@ -29,9 +29,13 @@ func (r *ChannelConfigRepository) GetByID(ctx context.Context, id uint) (*model.
 	return &cfg, nil
 }
 
-func (r *ChannelConfigRepository) List(ctx context.Context) ([]model.ChannelConfig, error) {
+func (r *ChannelConfigRepository) List(ctx context.Context, keyword string) ([]model.ChannelConfig, error) {
 	var list []model.ChannelConfig
-	err := r.db.WithContext(ctx).Order("created_at DESC").Find(&list).Error
+	query := r.db.WithContext(ctx).Order("created_at DESC")
+	if keyword != "" {
+		query = query.Where("name ILIKE ?", "%"+keyword+"%")
+	}
+	err := query.Find(&list).Error
 	return list, err
 }
 
