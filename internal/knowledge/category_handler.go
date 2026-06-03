@@ -31,14 +31,17 @@ func (h *Handler) KnowledgeCategoryTree(c *gin.Context) {
 
 func (h *Handler) Ask(c *gin.Context) {
 	var req struct {
-		Question string `json:"question" binding:"required"`
+		Question     string   `json:"question" binding:"required"`
+		Model        string   `json:"model,omitempty"`
+		DeepThinking bool     `json:"deep_thinking,omitempty"`
+		Images       []string `json:"images,omitempty"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "question is required")
 		return
 	}
 
-	resp, err := h.knowledgeService.Ask(c.Request.Context(), req.Question)
+	resp, err := h.knowledgeService.Ask(c.Request.Context(), req.Question, req.Model, req.DeepThinking, req.Images)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return

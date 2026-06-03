@@ -20,16 +20,18 @@ type ChatProvider interface {
 
 // ChatRequest 对话请求
 type ChatRequest struct {
-	Model    string        `json:"model"`
-	Messages []ChatMessage `json:"messages"`
-	Temperature float32    `json:"temperature,omitempty"`
-	MaxTokens   int        `json:"max_tokens,omitempty"`
+	Model           string        `json:"model"`
+	Messages        []ChatMessage `json:"messages"`
+	Temperature     float32       `json:"temperature,omitempty"`
+	MaxTokens       int           `json:"max_tokens,omitempty"`
+	ReasoningEffort string        `json:"reasoning_effort,omitempty"`
 }
 
 // ChatMessage 对话消息
 type ChatMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string   `json:"role"`
+	Content string   `json:"content"`
+	Images  []string `json:"-"` // base64 encoded images (not serialized directly)
 }
 
 // ChatResponse 对话响应

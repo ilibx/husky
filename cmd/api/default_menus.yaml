@@ -38,14 +38,14 @@ menus:
     icon: Reading
     sort: 30
     children:
-      - name: 文档管理
-        path: /knowledge/docs
-        sort: 1
-      - name: 向量库配置
-        path: /knowledge/config
-        sort: 2
       - name: 资料检索
         path: /knowledge/search
+        sort: 1
+      - name: 文档库管理
+        path: /knowledge/docs
+        sort: 2
+      - name: 知识库管理
+        path: /knowledge/config
         sort: 3
 
   - name: 系统管理

@@ -60,25 +60,25 @@ const routes: RouteRecordRaw[] = [
       // ---- 资料管理 ----
       {
         path: 'knowledge',
-        redirect: '/knowledge/docs',
+        redirect: '/knowledge/search',
         children: [
-          {
-            path: 'docs',
-            name: 'KnowledgeDocs',
-            component: () => import('@/views/knowledge/KnowledgeDocs.vue'),
-            meta: { title: '文档管理' },
-          },
-          {
-            path: 'config',
-            name: 'KnowledgeConfig',
-            component: () => import('@/views/knowledge/KnowledgeConfig.vue'),
-            meta: { title: '向量库配置' },
-          },
           {
             path: 'search',
             name: 'KnowledgeSearch',
             component: () => import('@/views/knowledge/KnowledgeSearch.vue'),
             meta: { title: '资料检索' },
+          },
+          {
+            path: 'docs',
+            name: 'KnowledgeDocs',
+            component: () => import('@/views/knowledge/KnowledgeDocs.vue'),
+            meta: { title: '文档库管理' },
+          },
+          {
+            path: 'config',
+            name: 'KnowledgeConfig',
+            component: () => import('@/views/knowledge/KnowledgeConfig.vue'),
+            meta: { title: '知识库管理' },
           },
         ],
       },

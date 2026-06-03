@@ -18,7 +18,8 @@ service.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 service.interceptors.response.use(
   (res) => {
     const data = res.data
-    if (data.code !== 0 && data.code !== 200) {
+    const code = data.code ?? res.status
+    if (code !== 0 && (code < 200 || code >= 300)) {
       ElMessage.error(data.message || '请求失败')
       if (data.code === 401) {
         localStorage.removeItem('token')
@@ -29,12 +30,16 @@ service.interceptors.response.use(
     return data
   },
   (err) => {
-    if (err.response?.status === 401) {
+    const data = err.response?.data
+    const message = typeof data === 'string'
+      ? data
+      : data?.message || data?.error || data?.msg || err.message || '网络错误'
+    if (err.response?.status === 401 || data?.code === 401) {
       localStorage.removeItem('token')
       router.push('/login')
     }
-    ElMessage.error(err.message || '网络错误')
-    return Promise.reject(err)
+    ElMessage.error(message)
+    return Promise.reject(new Error(message))
   },
 )
 

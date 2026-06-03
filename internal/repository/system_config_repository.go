@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/husky/husky/internal/model"
 	"gorm.io/gorm"
@@ -125,6 +127,28 @@ func (r *SystemConfigRepository) GetLLMConfig(ctx context.Context) (*model.LLMCo
 	return &cfg, nil
 }
 
+func (r *SystemConfigRepository) ListKnowledgeStoreConfigs(ctx context.Context) ([]model.KnowledgeStoreConfig, error) {
+	configs, err := r.ListByCategory(ctx, model.SysCfgCategoryVector)
+	if err != nil {
+		return nil, err
+	}
+	var stores []model.KnowledgeStoreConfig
+	for _, cfg := range configs {
+		if !strings.HasPrefix(cfg.Key, "source:") {
+			continue
+		}
+		var store model.KnowledgeStoreConfig
+		if err := json.Unmarshal([]byte(cfg.Value), &store); err != nil {
+			continue
+		}
+		if store.Name == "" {
+			store.Name = strings.TrimPrefix(cfg.Key, "source:")
+		}
+		stores = append(stores, store)
+	}
+	return stores, nil
+}
+
 func (r *SystemConfigRepository) GetVectorConfig(ctx context.Context) (*model.VectorDBConfig, error) {
 	configs, err := r.ListByCategory(ctx, model.SysCfgCategoryVector)
 	if err != nil {
@@ -132,6 +156,19 @@ func (r *SystemConfigRepository) GetVectorConfig(ctx context.Context) (*model.Ve
 	}
 
 	cfg := model.DefaultVectorDBConfig()
+	stores, _ := r.ListKnowledgeStoreConfigs(ctx)
+	for _, store := range stores {
+		if store.Enabled && store.IsDefault && store.Kind == "vector" {
+			cfg.Provider = store.Provider
+			cfg.Host = store.Host
+			cfg.Port = store.Port
+			cfg.User = store.User
+			cfg.Password = store.Password
+			cfg.Database = store.Database
+			cfg.SSLMode = store.SSLMode
+			return &cfg, nil
+		}
+	}
 	for _, c := range configs {
 		switch c.Key {
 		case model.SysCfgVectorProvider:

@@ -7,7 +7,12 @@ import (
 
 // CreateNotification 创建通知
 func (r *TicketRepository) CreateNotification(ctx context.Context, n *model.Notification) error {
-	return r.db.WithContext(ctx).Create(n).Error
+	if err := r.db.WithContext(ctx).Create(n).Error; err != nil {
+		return err
+	}
+	r.notifyUnreadChanged(ctx, n.UserID)
+	r.notifyUnreadChanged(ctx, 0)
+	return nil
 }
 
 // ListNotifications 获取通知列表
@@ -49,14 +54,24 @@ func (r *TicketRepository) GetUnreadNotificationCount(ctx context.Context, userI
 
 // MarkNotificationRead 标记通知为已读
 func (r *TicketRepository) MarkNotificationRead(ctx context.Context, id, userID uint) error {
-	return r.db.WithContext(ctx).Model(&model.Notification{}).
+	if err := r.db.WithContext(ctx).Model(&model.Notification{}).
 		Where("id = ? AND user_id = ?", id, userID).
-		Update("is_read", true).Error
+		Update("is_read", true).Error; err != nil {
+		return err
+	}
+	r.notifyUnreadChanged(ctx, userID)
+	r.notifyUnreadChanged(ctx, 0)
+	return nil
 }
 
 // MarkAllNotificationsRead 标记所有通知为已读
 func (r *TicketRepository) MarkAllNotificationsRead(ctx context.Context, userID uint) error {
-	return r.db.WithContext(ctx).Model(&model.Notification{}).
+	if err := r.db.WithContext(ctx).Model(&model.Notification{}).
 		Where("user_id = ? AND is_read = ?", userID, false).
-		Update("is_read", true).Error
+		Update("is_read", true).Error; err != nil {
+		return err
+	}
+	r.notifyUnreadChanged(ctx, userID)
+	r.notifyUnreadChanged(ctx, 0)
+	return nil
 }

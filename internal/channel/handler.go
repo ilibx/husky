@@ -23,14 +23,19 @@ type QueryService interface {
 }
 
 type Handler struct {
-	gw    *gateway.Gateway
-	cfgSvc ConfigService
-	querySvc QueryService
-	log    *logger.Logger
+	gw              *gateway.Gateway
+	cfgSvc          ConfigService
+	querySvc        QueryService
+	notificationHub *NotificationHub
+	log             *logger.Logger
 }
 
 func NewHandler(gw *gateway.Gateway, cfgSvc ConfigService, querySvc QueryService, log *logger.Logger) *Handler {
 	return &Handler{gw: gw, cfgSvc: cfgSvc, querySvc: querySvc, log: log}
+}
+
+func (h *Handler) SetNotificationHub(hub *NotificationHub) {
+	h.notificationHub = hub
 }
 
 func (h *Handler) JoinGroup(c *gin.Context) {

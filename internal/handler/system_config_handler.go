@@ -98,6 +98,18 @@ func (h *SystemConfigHandler) GetVectorConfig(c *gin.Context) {
 	httputil.Success(c, vCfg)
 }
 
+func (h *SystemConfigHandler) GetKnowledgeStores(c *gin.Context) {
+	stores, err := h.repo.ListKnowledgeStoreConfigs(c.Request.Context())
+	if err != nil {
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
+		return
+	}
+	if stores == nil {
+		stores = []model.KnowledgeStoreConfig{}
+	}
+	httputil.Success(c, gin.H{"data": stores})
+}
+
 func (h *SystemConfigHandler) CreateSystemConfig(c *gin.Context) {
 	var req model.SystemConfigRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

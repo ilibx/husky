@@ -31,12 +31,21 @@ func (s *categoryService) Create(ctx context.Context, req *model.CreateCategoryR
 		return nil, fmt.Errorf("name is required")
 	}
 
+	exists, err := s.catRepo.ExistsByNameAndParent(ctx, req.Name, req.ParentID, 0)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, fmt.Errorf("category name already exists under the same parent")
+	}
+
 	cat := &model.Category{
 		Name:        req.Name,
 		Description: req.Description,
 		ParentID:    req.ParentID,
 		SortOrder:   req.SortOrder,
 		Status:      1,
+		Type:        "system",
 	}
 
 	// 构建 Path
@@ -90,6 +99,14 @@ func (s *categoryService) Update(ctx context.Context, id uint, req *model.Update
 	}
 	if req.SortOrder != 0 {
 		cat.SortOrder = req.SortOrder
+	}
+
+	exists, err := s.catRepo.ExistsByNameAndParent(ctx, cat.Name, cat.ParentID, id)
+	if err != nil {
+		return nil, err
+	}
+	if exists {
+		return nil, fmt.Errorf("category name already exists under the same parent")
 	}
 
 	if err := s.catRepo.Update(ctx, cat); err != nil {

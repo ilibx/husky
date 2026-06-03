@@ -114,15 +114,42 @@ func (p *OpenAIProvider) BatchEmbed(ctx context.Context, texts []string) ([][]fl
 }
 
 func (p *OpenAIProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+	messages := make([]map[string]interface{}, len(req.Messages))
+	for i, msg := range req.Messages {
+		m := map[string]interface{}{
+			"role": msg.Role,
+		}
+		if len(msg.Images) > 0 {
+			content := []map[string]interface{}{
+				{"type": "text", "text": msg.Content},
+			}
+			for _, img := range msg.Images {
+				content = append(content, map[string]interface{}{
+					"type": "image_url",
+					"image_url": map[string]string{
+						"url": img,
+					},
+				})
+			}
+			m["content"] = content
+		} else {
+			m["content"] = msg.Content
+		}
+		messages[i] = m
+	}
+
 	body := map[string]interface{}{
-		"model": req.Model,
-		"messages": req.Messages,
+		"model":    req.Model,
+		"messages": messages,
 	}
 	if req.Temperature > 0 {
 		body["temperature"] = req.Temperature
 	}
 	if req.MaxTokens > 0 {
 		body["max_tokens"] = req.MaxTokens
+	}
+	if req.ReasoningEffort != "" {
+		body["reasoning_effort"] = req.ReasoningEffort
 	}
 
 	payload, err := json.Marshal(body)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { Marked } from 'marked'
+import { List, Link, EditPen, View } from '@element-plus/icons-vue'
 
 const props = withDefaults(defineProps<{
   modelValue: string
@@ -21,7 +22,33 @@ const activeTab = ref<'edit' | 'preview'>('edit')
 const renderedHTML = computed(() => {
   if (!props.modelValue) return ''
   try {
-    return marked.parse(props.modelValue) as string
+    const text = props.modelValue
+    // Detect YAML frontmatter: first line is '---', then key:value lines, then '---'
+    const lines = text.split('\n')
+    if (lines.length > 1 && lines[0].trim() === '---') {
+      let endIdx = -1
+      for (let i = 1; i < lines.length; i++) {
+        if (lines[i].trim() === '---') { endIdx = i; break }
+      }
+      if (endIdx > 0) {
+        // Build YAML table from frontmatter lines
+        let tableHtml = '<table class="yaml-table">'
+        for (let i = 1; i < endIdx; i++) {
+          const line = lines[i]
+          const colonIdx = line.indexOf(':')
+          if (colonIdx < 0) continue
+          const key = line.slice(0, colonIdx).trim()
+          const val = line.slice(colonIdx + 1).trim()
+          tableHtml += `<tr><td class="yaml-key">${key}</td><td class="yaml-val">${val}</td></tr>`
+        }
+        tableHtml += '</table>'
+        // Parse the rest as markdown
+        const body = lines.slice(endIdx + 1).join('\n')
+        const bodyHtml = marked.parse(body) as string
+        return tableHtml + bodyHtml
+      }
+    }
+    return marked.parse(text) as string
   } catch {
     return props.modelValue
   }
@@ -52,10 +79,10 @@ function insertMarkdown(before: string, after = '') {
     <div class="md-editor-toolbar">
       <el-button-group>
         <el-button size="small" @click="insertMarkdown('**', '**')" title="加粗">
-          <el-icon><Bold /></el-icon>
+          <b>B</b>
         </el-button>
         <el-button size="small" @click="insertMarkdown('*', '*')" title="斜体">
-          <el-icon><Italic /></el-icon>
+          <i>I</i>
         </el-button>
         <el-button size="small" @click="insertMarkdown('# ', '')" title="标题1">
           <b>H1</b>
@@ -70,29 +97,37 @@ function insertMarkdown(before: string, after = '') {
           <el-icon><List /></el-icon>
         </el-button>
         <el-button size="small" @click="insertMarkdown('1. ', '')" title="有序列表">
-          <el-icon><OrderedList /></el-icon>
+          1.
         </el-button>
         <el-button size="small" @click="insertMarkdown('```\n', '\n```')" title="代码块">
-          <el-icon><Code /></el-icon>
+          <span style="font-family:monospace;font-weight:700">&lt;/&gt;</span>
         </el-button>
         <el-button size="small" @click="insertMarkdown('[', '](url)')" title="链接">
           <el-icon><Link /></el-icon>
         </el-button>
         <el-button size="small" @click="insertMarkdown('> ', '')" title="引用">
-          <el-icon><Quote /></el-icon>
+          ❝
         </el-button>
       </el-button-group>
       <div class="md-editor-tabs">
-        <el-button
-          :type="activeTab === 'edit' ? 'primary' : 'default'"
-          size="small"
-          @click="activeTab = 'edit'"
-        >编辑</el-button>
-        <el-button
-          :type="activeTab === 'preview' ? 'primary' : 'default'"
-          size="small"
-          @click="activeTab = 'preview'"
-        >预览</el-button>
+        <el-button-group>
+          <el-button
+            :type="activeTab === 'edit' ? 'primary' : 'default'"
+            size="small"
+            @click="activeTab = 'edit'"
+            title="编辑"
+          >
+            <el-icon><EditPen /></el-icon>
+          </el-button>
+          <el-button
+            :type="activeTab === 'preview' ? 'primary' : 'default'"
+            size="small"
+            @click="activeTab = 'preview'"
+            title="预览"
+          >
+            <el-icon><View /></el-icon>
+          </el-button>
+        </el-button-group>
       </div>
     </div>
     <div class="md-editor-body" :style="{ minHeight: props.minHeight }">
@@ -223,5 +258,39 @@ function insertMarkdown(before: string, after = '') {
 }
 .markdown-body :deep(img) {
   max-width: 100%;
+}
+</style>
+
+<style>
+/* YAML frontmatter table in preview — unscoped because v-html lacks data attr */
+.yaml-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 16px;
+  background: #fafafa;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.yaml-table tr {
+  border-bottom: 1px solid #e5e6eb;
+}
+.yaml-table tr:last-child {
+  border-bottom: none;
+}
+.yaml-table td {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.yaml-key {
+  width: 120px;
+  font-weight: 600;
+  color: #4e5969;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  vertical-align: middle;
+  background: #f2f3f5;
+}
+.yaml-val {
+  color: #303133;
 }
 </style>

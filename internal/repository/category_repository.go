@@ -53,6 +53,23 @@ func (r *CategoryRepository) ListByType(ctx context.Context, categoryType string
 	return list, err
 }
 
+func (r *CategoryRepository) ExistsByNameAndParent(ctx context.Context, name string, parentID *uint, excludeID uint) (bool, error) {
+	var count int64
+	query := r.db.WithContext(ctx).Model(&model.Category{}).Where("name = ?", name)
+	if parentID == nil {
+		query = query.Where("parent_id IS NULL")
+	} else {
+		query = query.Where("parent_id = ?", *parentID)
+	}
+	if excludeID > 0 {
+		query = query.Where("id <> ?", excludeID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 func (r *CategoryRepository) Update(ctx context.Context, cat *model.Category) error {
 	return r.db.WithContext(ctx).Save(cat).Error
 }

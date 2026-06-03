@@ -17,7 +17,7 @@ type Service interface {
 	ExportKnowledge(ctx context.Context) ([]model.KnowledgeBase, error)
 	ListCategories(ctx context.Context) ([]model.Category, error)
 	CategoryTree(ctx context.Context) ([]model.CategoryTreeNode, error)
-	Ask(ctx context.Context, question string) (*model.AnswerResponse, error)
+	Ask(ctx context.Context, question string, model string, deepThinking bool, images []string) (*model.AnswerResponse, error)
 	RecordView(ctx context.Context, id string) error
 	RecommendKnowledge(ctx context.Context, limit int) ([]model.KnowledgeHotResponse, error)
 	RecordFeedback(ctx context.Context, knowledgeID string, userID uint, helpful bool, comment string) error

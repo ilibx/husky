@@ -16,7 +16,7 @@ type UpdateCategoryRequest struct {
 	SortOrder   int    `json:"sort_order,omitempty"`
 }
 
-// Category 工单分类
+// Category 系统统一分类
 type Category struct {
 	Base
 	Name        string `gorm:"size:100;not null" json:"name"`
@@ -25,10 +25,10 @@ type Category struct {
 	Path        string `gorm:"size:500" json:"path"`
 	SortOrder   int    `gorm:"default:0" json:"sort_order"`
 	Status      int    `gorm:"default:1" json:"status"` // 1: 激活，0: 禁用
-	Type        string `gorm:"size:50;default:'ticket'" json:"type"` // ticket, knowledge, both
+	Type        string `gorm:"size:50;default:'system'" json:"type"`
 
-	Parent   *Category   `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
-	Children []Category  `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	Parent   *Category  `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
+	Children []Category `gorm:"foreignKey:ParentID" json:"children,omitempty"`
 }
 
 // CategoryTreeNode 分类树节点

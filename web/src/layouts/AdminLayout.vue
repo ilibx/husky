@@ -5,6 +5,8 @@ import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
 import request from '@/api/request'
 
+const apiBaseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+
 const router = useRouter()
 const route = useRoute()
 const user = useUserStore()
@@ -12,13 +14,30 @@ const app = useAppStore()
 const unreadCount = ref(0)
 const menuItems = ref<any[]>([])
 const menuLoading = ref(true)
-let pollTimer: ReturnType<typeof setInterval> | undefined
+let notificationSocket: WebSocket | undefined
 
-async function fetchUnreadCount() {
-  try {
-    const res: any = await request.get('/notifications/unread-count')
-    unreadCount.value = res.count ?? res.data?.count ?? 0
-  } catch {
+function getNotificationSocketURL() {
+  const token = localStorage.getItem('token') || ''
+  const base = apiBaseURL.startsWith('http') ? apiBaseURL : `${window.location.origin}${apiBaseURL}`
+  const url = new URL(`${base}/notifications/stream`)
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:'
+  url.searchParams.set('token', token)
+  return url.toString()
+}
+
+function connectNotificationSocket() {
+  notificationSocket = new WebSocket(getNotificationSocketURL())
+  notificationSocket.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data)
+      if (data.type === 'unread_count') {
+        unreadCount.value = data.count ?? 0
+      }
+    } catch {
+      unreadCount.value = 0
+    }
+  }
+  notificationSocket.onerror = () => {
     unreadCount.value = 0
   }
 }
@@ -40,12 +59,11 @@ function goToNotifications() {
 
 onMounted(() => {
   fetchMenus()
-  fetchUnreadCount()
-  pollTimer = setInterval(fetchUnreadCount, 30000)
+  connectNotificationSocket()
 })
 
 onUnmounted(() => {
-  if (pollTimer) clearInterval(pollTimer)
+  notificationSocket?.close()
 })
 
 function handleLogout() {
@@ -316,11 +334,19 @@ function handleLogout() {
   background: var(--bg-page);
   padding: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .page-wrapper {
+  flex: 1;
+  width: 100%;
   padding: 24px;
   max-width: 1400px;
   margin: 0 auto;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 </style>

@@ -36,14 +36,30 @@ const (
 
 // SysCfg keys  Vector
 const (
-	SysCfgVectorProvider   = "vector_provider"
-	SysCfgVectorHost       = "vector_host"
-	SysCfgVectorPort       = "vector_port"
-	SysCfgVectorUser       = "vector_user"
-	SysCfgVectorPassword   = "vector_password"
-	SysCfgVectorDatabase   = "vector_database"
-	SysCfgVectorSSLMode    = "vector_sslmode"
+	SysCfgVectorProvider = "vector_provider"
+	SysCfgVectorHost     = "vector_host"
+	SysCfgVectorPort     = "vector_port"
+	SysCfgVectorUser     = "vector_user"
+	SysCfgVectorPassword = "vector_password"
+	SysCfgVectorDatabase = "vector_database"
+	SysCfgVectorSSLMode  = "vector_sslmode"
+	SysCfgVectorSources  = "sources"
 )
+
+type KnowledgeStoreConfig struct {
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	Provider    string `json:"provider"`
+	Host        string `json:"host"`
+	Port        string `json:"port"`
+	User        string `json:"user"`
+	Password    string `json:"password"`
+	Database    string `json:"database"`
+	SSLMode     string `json:"sslmode"`
+	Enabled     bool   `json:"enabled"`
+	IsDefault   bool   `json:"is_default"`
+	Description string `json:"description"`
+}
 
 // SystemConfigRequest 创建/更新系统配置请求
 type SystemConfigRequest struct {

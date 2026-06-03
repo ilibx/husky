@@ -26,7 +26,7 @@ type KnowledgeBase struct {
 	ViewCount       int            `gorm:"default:0" json:"view_count"`
 	HotScore        float64        `gorm:"default:0" json:"hot_score"`
 	Status          string         `gorm:"type:varchar(20);default:'active'" json:"status"`
-	CreatedByUUID   string         `gorm:"column:created_by;type:uuid" json:"created_by_uuid,omitempty"`
+	CreatedByUUID   *string        `gorm:"column:created_by;type:uuid" json:"created_by_uuid,omitempty"`
 	CreatedByUserID uint           `gorm:"default:0" json:"created_by_user_id,omitempty"`
 	Creator         User           `gorm:"foreignKey:CreatedByUserID" json:"creator,omitempty"`
 	UpdatedAt       time.Time      `json:"updated_at"`

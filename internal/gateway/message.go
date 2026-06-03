@@ -67,5 +67,5 @@ type UserEnricher interface {
 
 // BotHandler 多渠道知识库问答接口
 type BotHandler interface {
-	Ask(ctx context.Context, question string) (*model.AnswerResponse, error)
+	Ask(ctx context.Context, question string, model string, deepThinking bool, images []string) (*model.AnswerResponse, error)
 }

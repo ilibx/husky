@@ -27,9 +27,13 @@ func SetJWTConfig(secret string, expireHour int) {
 	jwtExpireHour = expireHour
 }
 
+func JWTKeyFunc(token *jwt.Token) (interface{}, error) {
+	return jwtSecret, nil
+}
+
 // jwtKeyFunc 返回 JWT 密钥验证函数
 func jwtKeyFunc(token *jwt.Token) (interface{}, error) {
-	return jwtSecret, nil
+	return JWTKeyFunc(token)
 }
 
 // SetPermissionsLoader 设置权限加载器

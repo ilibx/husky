@@ -6,7 +6,6 @@ import request from '@/api/request'
 interface Category {
   id: number
   name: string
-  type: string
   parent_id: number | null
   sort_order: number
   status: number
@@ -20,19 +19,12 @@ const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
 const form = ref({
   name: '',
-  type: 'ticket',
   parent_id: null as number | null,
   sort_order: 0,
   status: 1,
   description: '',
 })
 const formSubtitle = ref('')
-
-const typeOptions = [
-  { label: '工单', value: 'ticket' },
-  { label: '知识库', value: 'knowledge' },
-  { label: '通用', value: 'both' },
-]
 
 function buildTree(items: Category[]): Category[] {
   const map = new Map<number, Category>()
@@ -42,9 +34,9 @@ function buildTree(items: Category[]): Category[] {
   }
   for (const item of items) {
     const node = map.get(item.id)!
-    if (item.parent_id !== null && map.has(item.parent_id)) {
+    if (item.parent_id != null && map.has(item.parent_id)) {
       map.get(item.parent_id)!.children!.push(node)
-    } else if (item.parent_id === null) {
+    } else if (item.parent_id == null) {
       roots.push(node)
     }
   }
@@ -87,7 +79,6 @@ function openAdd(parentId: number | null = null) {
   formSubtitle.value = parent ? `（父分类：${parent.name}）` : ''
   form.value = {
     name: '',
-    type: 'ticket',
     parent_id: parentId,
     sort_order: 0,
     status: 1,
@@ -101,7 +92,6 @@ function openEdit(row: Category) {
   formSubtitle.value = ''
   form.value = {
     name: row.name,
-    type: row.type,
     parent_id: row.parent_id,
     sort_order: row.sort_order,
     status: row.status,
@@ -138,18 +128,15 @@ async function handleDelete(id: number) {
   }
 }
 
-function typeTag(type: string) {
-  const map: Record<string, string> = { ticket: 'primary', knowledge: 'success', both: 'warning' }
-  return (map[type] || 'info') as 'primary' | 'success' | 'warning' | 'info'
-}
-
-const typeLabelMap: Record<string, string> = { ticket: '工单', knowledge: '知识库', both: '通用' }
-
 async function fetchData() {
   loading.value = true
   try {
     const res: any = await request.get('/categories')
-    flatList.value = res.data?.data || []
+    flatList.value = (res.data?.data || []).map((item: Category) => ({
+      ...item,
+      parent_id: item.parent_id ?? null,
+      description: item.description || '',
+    }))
   } catch {
     flatList.value = []
   } finally {
@@ -169,12 +156,8 @@ onMounted(fetchData)
 
     <el-card>
       <el-table :data="treeData" v-loading="loading" row-key="id" default-expand-all stripe border style="width: 100%">
-        <el-table-column prop="name" label="名称" min-width="200" />
-        <el-table-column prop="type" label="类型" width="120">
-          <template #default="{ row }">
-            <el-tag :type="typeTag(row.type)" size="small">{{ typeLabelMap[row.type] || row.type }}</el-tag>
-          </template>
-        </el-table-column>
+        <el-table-column prop="name" label="名称" min-width="240" />
+        <el-table-column prop="description" label="描述" min-width="220" show-overflow-tooltip />
         <el-table-column prop="sort_order" label="排序" width="80" />
         <el-table-column prop="status" label="状态" width="80">
           <template #default="{ row }">
@@ -195,11 +178,6 @@ onMounted(fetchData)
       <el-form :model="form" label-width="100px">
         <el-form-item label="名称">
           <el-input v-model="form.name" placeholder="请输入分类名称" />
-        </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="form.type" style="width: 100%">
-            <el-option v-for="opt in typeOptions" :key="opt.value" :label="opt.label" :value="opt.value" />
-          </el-select>
         </el-form-item>
         <el-form-item label="父分类">
           <el-select v-model="form.parent_id" placeholder="无（根分类）" clearable style="width: 100%">

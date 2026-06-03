@@ -163,6 +163,14 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	deptHandler := handler.NewDepartmentHandler(deptService)
 	channelHandler := channel.NewHandler(gw, channelCfgSvc, ticketSvc, log)
+	notificationHub := channel.NewNotificationHub()
+	channelHandler.SetNotificationHub(notificationHub)
+	ticketRepo.SetNotificationListener(func(ctx context.Context, userID uint) {
+		count, err := ticketRepo.GetUnreadNotificationCount(ctx, userID)
+		if err == nil {
+			notificationHub.Publish(userID, count)
+		}
+	})
 	channelUserRepo := repository.NewChannelUserRepository(dbConn.DB)
 	channelGroupRepo := repository.NewChannelGroupRepository(dbConn.DB)
 	channelUserHandler := channel.NewChannelUserHandler(channelUserRepo)
@@ -279,6 +287,9 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	categories.Use(auth.AuthMiddleware())
 	setupCategoryRoutes(categories, categoryHandler)
 
+	notificationStream := v1.Group("/notifications")
+	notificationStream.GET("/stream", channelHandler.WatchNotifications)
+
 	notifications := v1.Group("/notifications")
 	notifications.Use(auth.AuthMiddleware())
 	setupNotificationRoutes(notifications, channelHandler)
@@ -299,6 +310,7 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 		cfgRoutes.GET("/:id", systemCfgHandler.GetSystemConfig)
 		cfgRoutes.GET("/llm", systemCfgHandler.GetLLMConfig)
 		cfgRoutes.GET("/vector", systemCfgHandler.GetVectorConfig)
+		cfgRoutes.GET("/knowledge-stores", systemCfgHandler.GetKnowledgeStores)
 		cfgRoutes.GET("/lookup", systemCfgHandler.GetSystemConfigByKey)
 		cfgRoutes.POST("", systemCfgHandler.CreateSystemConfig)
 		cfgRoutes.PUT("/:id", systemCfgHandler.UpdateSystemConfig)
@@ -310,7 +322,7 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	menus := v1.Group("/menus")
 	menus.Use(auth.AuthMiddleware())
 	{
-		menus.GET("", menuHandler.GetMenus)          // returns menus for current role (all auth users)
+		menus.GET("", menuHandler.GetMenus) // returns menus for current role (all auth users)
 		menus.GET("/all", auth.RBACMiddleware("admin"), menuHandler.ListAllMenus)
 		menus.POST("", auth.RBACMiddleware("admin"), menuHandler.CreateMenu)
 		menus.PUT("/:id", auth.RBACMiddleware("admin"), menuHandler.UpdateMenu)

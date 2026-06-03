@@ -20,6 +20,11 @@ interface Knowledge {
   created_at: string
 }
 
+interface Category {
+  id: number
+  name: string
+}
+
 const list = ref<Knowledge[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -33,6 +38,16 @@ const previewItem = ref<Knowledge | null>(null)
 const formTitle = ref('新增知识')
 const form = ref({ id: 0, title: '', content: '', language: 'zh', category: '', tags: '', status: 'active', source_type: 'manual', source_url: '' })
 const uploadLoading = ref(false)
+const categories = ref<Category[]>([])
+
+async function fetchCategories() {
+  try {
+    const res: any = await request.get('/categories')
+    categories.value = res.data?.data || []
+  } catch {
+    categories.value = []
+  }
+}
 
 async function fetchData() {
   loading.value = true
@@ -182,13 +197,16 @@ const renderedContent = computed(() => {
   return previewItem.value.content.replace(/\n/g, '<br>')
 })
 
-onMounted(fetchData)
+onMounted(() => {
+  fetchData()
+  fetchCategories()
+})
 </script>
 
 <template>
   <div>
     <div class="page-header">
-      <h2>文档管理</h2>
+      <h2>文档库管理</h2>
     </div>
 
     <el-card>
@@ -249,7 +267,11 @@ onMounted(fetchData)
             <el-option label="英文" value="en" />
           </el-select>
         </el-form-item>
-        <el-form-item label="分类"><el-input v-model="form.category" placeholder="分类名称" /></el-form-item>
+        <el-form-item label="分类">
+          <el-select v-model="form.category" filterable clearable placeholder="选择系统分类" style="width: 100%">
+            <el-option v-for="item in categories" :key="item.id" :label="item.name" :value="item.name" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="标签"><el-input v-model="form.tags" placeholder="多个标签用逗号分隔" /></el-form-item>
         <el-form-item label="状态" v-if="form.id">
           <el-select v-model="form.status">

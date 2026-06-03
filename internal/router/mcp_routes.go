@@ -8,15 +8,12 @@ import (
 )
 
 func RegisterMCPRoutes(r *gin.RouterGroup, db *gorm.DB) {
-    repo := repository.NewMCPRepository(db)
-    h := handler.NewMCPHandler(*repo)
-    
-    mcpGroup := r.Group("/mcps")
-    {
-        mcpGroup.GET("", h.List)
-        mcpGroup.GET("/:id", h.Get)
-        mcpGroup.POST("", h.Create)
-        mcpGroup.PUT("/:id", h.Update)
-        mcpGroup.DELETE("/:id", h.Delete)
-    }
+	repo := repository.NewMCPRepository(db)
+	h := handler.NewMCPHandler(*repo)
+
+	r.GET("", h.List)
+	r.GET("/:id", h.Get)
+	r.POST("", h.Create)
+	r.PUT("/:id", h.Update)
+	r.DELETE("/:id", h.Delete)
 }

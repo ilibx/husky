@@ -40,32 +40,39 @@ func (h *MCPHandler) Get(c *gin.Context) {
 }
 
 func (h *MCPHandler) Create(c *gin.Context) {
-    var m model.MCP
-    if err := c.ShouldBindJSON(&m); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
-    // assume creator ID from auth middleware, set later if needed
-    if err := h.repo.Create(c, &m); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-    c.JSON(http.StatusOK, m)
+	var m model.MCP
+	if err := c.ShouldBindJSON(&m); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	currentUserID, _ := c.Get("user_id")
+	if uid, ok := currentUserID.(uint); ok {
+		m.CreatedBy = uid
+	}
+	if err := h.repo.Create(c, &m); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, m)
 }
 
 func (h *MCPHandler) Update(c *gin.Context) {
-    id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
-    var m model.MCP
-    if err := c.ShouldBindJSON(&m); err != nil {
-        c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-        return
-    }
-    m.ID = uint(id)
-    if err := h.repo.Update(c, &m); err != nil {
-        c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-        return
-    }
-    c.JSON(http.StatusOK, m)
+	id, _ := strconv.ParseUint(c.Param("id"), 10, 64)
+	var m model.MCP
+	if err := c.ShouldBindJSON(&m); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	m.ID = uint(id)
+	currentUserID, _ := c.Get("user_id")
+	if uid, ok := currentUserID.(uint); ok {
+		m.CreatedBy = uid
+	}
+	if err := h.repo.Update(c, &m); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, m)
 }
 
 func (h *MCPHandler) Delete(c *gin.Context) {

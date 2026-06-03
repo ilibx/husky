@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+
 	"gorm.io/gorm"
 )
 
@@ -10,26 +12,26 @@ type DatabaseConnection struct {
 }
 
 var safeColumns = map[string]bool{
-	"id":              true,
-	"ticket_no":       true,
-	"title":           true,
-	"status":          true,
-	"priority":        true,
-	"category_id":     true,
-	"assignee_id":     true,
-	"requester_id":    true,
-	"created_by":      true,
-	"department_id":   true,
-	"source":          true,
-	"created_at":      true,
-	"updated_at":      true,
-	"due_at":          true,
-	"resolved_at":     true,
-	"closed_at":       true,
-	"role":            true,
-	"email":           true,
-	"username":        true,
-	"is_active":       true,
+	"id":            true,
+	"ticket_no":     true,
+	"title":         true,
+	"status":        true,
+	"priority":      true,
+	"category_id":   true,
+	"assignee_id":   true,
+	"requester_id":  true,
+	"created_by":    true,
+	"department_id": true,
+	"source":        true,
+	"created_at":    true,
+	"updated_at":    true,
+	"due_at":        true,
+	"resolved_at":   true,
+	"closed_at":     true,
+	"role":          true,
+	"email":         true,
+	"username":      true,
+	"is_active":     true,
 }
 
 func isSafeColumn(name string) bool {
@@ -49,6 +51,17 @@ func NewBaseRepository(db *gorm.DB) *BaseRepository {
 // TicketRepository 工单 Repository
 type TicketRepository struct {
 	*BaseRepository
+	notificationListener func(context.Context, uint)
+}
+
+func (r *TicketRepository) SetNotificationListener(listener func(context.Context, uint)) {
+	r.notificationListener = listener
+}
+
+func (r *TicketRepository) notifyUnreadChanged(ctx context.Context, userID uint) {
+	if r.notificationListener != nil {
+		r.notificationListener(ctx, userID)
+	}
 }
 
 // GetDB 获取底层数据库连接

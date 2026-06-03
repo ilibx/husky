@@ -63,39 +63,58 @@ onMounted(fetchLevels)
 <template>
   <div>
     <div class="page-header">
-      <h2><el-icon><Bell /></el-icon> 等级管理</h2>
+      <div>
+        <h2><el-icon><Bell /></el-icon> 等级管理</h2>
+        <p>配置通知预警等级、颜色和启用状态，用于 SLA 与推送规则匹配。</p>
+      </div>
+      <div class="header-actions">
+        <el-button @click="add">添加等级</el-button>
+        <el-button type="primary" :loading="saving" @click="save">保存配置</el-button>
+      </div>
     </div>
 
-    <el-card>
-      <div class="tab-toolbar">
-        <el-button size="small" @click="add">添加等级</el-button>
-        <el-button type="primary" :loading="saving" @click="save">保存</el-button>
-      </div>
-
-      <el-table :data="levels" v-loading="loading" stripe style="width:100%">
-        <el-table-column label="等级名称" width="200">
-          <template #default="{ row, $index }">
-            <el-input v-model="row.name" placeholder="如 紧急" size="small" @input="autoKey(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="标识" width="200">
-          <template #default="{ row, $index }">
-            <el-input v-model="row.key" placeholder="如 critical" size="small" />
-          </template>
-        </el-table-column>
-        <el-table-column label="颜色" width="120">
-          <template #default="{ row, $index }">
-            <el-color-picker v-model="row.color" />
-          </template>
-        </el-table-column>
-        <el-table-column label="启用" width="100">
+    <el-card class="level-card" shadow="never">
+      <el-table
+        :data="levels"
+        v-loading="loading"
+        row-key="key"
+        class="level-table"
+        style="width:100%"
+      >
+        <el-table-column label="等级" min-width="240">
           <template #default="{ row }">
-            <el-switch v-model="row.enabled" />
+            <div class="level-name-cell">
+              <span class="color-dot" :style="{ backgroundColor: row.color }"></span>
+              <el-input v-model="row.name" placeholder="如 紧急" @input="autoKey(row)" />
+            </div>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="100">
-          <template #default="{ row, $index }">
-            <el-button size="small" type="danger" :disabled="levels.length <= 1" @click="remove($index)">删除</el-button>
+        <el-table-column label="标识" min-width="220">
+          <template #default="{ row }">
+            <el-input v-model="row.key" placeholder="如 critical" />
+          </template>
+        </el-table-column>
+        <el-table-column label="颜色" width="180" align="center">
+          <template #default="{ row }">
+            <div class="color-cell">
+              <el-color-picker v-model="row.color" />
+              <span>{{ row.color }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="预览" width="140" align="center">
+          <template #default="{ row }">
+            <el-tag :color="row.color" class="preview-tag" effect="dark">{{ row.name || row.key || '未命名' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="120" align="center">
+          <template #default="{ row }">
+            <el-switch v-model="row.enabled" active-text="启用" inactive-text="停用" inline-prompt />
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="110" align="center" fixed="right">
+          <template #default="{ $index }">
+            <el-button link type="danger" :disabled="levels.length <= 1" @click="remove($index)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -106,17 +125,64 @@ onMounted(fetchLevels)
 <style scoped>
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
 }
 .page-header h2 {
-  margin: 0;
-}
-.tab-toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin: 0;
+}
+.page-header p {
+  margin: 8px 0 0;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+.header-actions {
+  display: flex;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.level-card {
+  border-radius: 12px;
+}
+.level-table :deep(.el-table__header th) {
+  background: #f7f9fc;
+  color: #606266;
+  font-weight: 600;
+}
+.level-table :deep(.el-table__row) {
+  height: 64px;
+}
+.level-table :deep(.el-input__wrapper) {
+  box-shadow: none;
+  background: #f7f9fc;
+}
+.level-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.08);
+  flex-shrink: 0;
+}
+.color-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #909399;
+  font-size: 12px;
+}
+.preview-tag {
+  border: none;
+  min-width: 64px;
 }
 </style>

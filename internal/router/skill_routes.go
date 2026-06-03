@@ -1,22 +1,26 @@
 package router
 
 import (
-    "github.com/gin-gonic/gin"
-    "github.com/husky/husky/internal/handler"
-    "github.com/husky/husky/internal/repository"
-    "gorm.io/gorm"
+	"github.com/gin-gonic/gin"
+	"github.com/husky/husky/internal/handler"
+	"github.com/husky/husky/internal/repository"
+	"gorm.io/gorm"
 )
 
 func RegisterSkillRoutes(r *gin.RouterGroup, db *gorm.DB) {
-    repo := repository.NewSkillRepository(db)
-    h := handler.NewSkillHandler(*repo)
-    
-    skillGroup := r.Group("/skills")
-    {
-        skillGroup.GET("", h.List)
-        skillGroup.GET("/:id", h.Get)
-        skillGroup.POST("", h.Create)
-        skillGroup.PUT("/:id", h.Update)
-        skillGroup.DELETE("/:id", h.Delete)
-    }
+	skillRepo := repository.NewSkillRepository(db)
+	mcpRepo := repository.NewMCPRepository(db)
+	skillH := handler.NewSkillHandler(*skillRepo)
+	mcpH := handler.NewSkillMCPHandler(*mcpRepo)
+
+	r.GET("", skillH.List)
+	r.GET("/:id", skillH.Get)
+	r.POST("", skillH.Create)
+	r.PUT("/:id", skillH.Update)
+	r.DELETE("/:id", skillH.Delete)
+
+	r.GET("/:id/mcps", mcpH.List)
+	r.POST("/:id/mcps", mcpH.Create)
+	r.PUT("/:id/mcps/:mcpId", mcpH.Update)
+	r.DELETE("/:id/mcps/:mcpId", mcpH.Delete)
 }

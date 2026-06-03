@@ -78,24 +78,46 @@ onMounted(fetchData)
 <template>
   <div>
     <div class="page-header">
-      <h2>标签管理</h2>
+      <div>
+        <h2><el-icon><CollectionTag /></el-icon> 标签管理</h2>
+        <p>维护系统标签颜色和名称，用于工单筛选、标记和展示。</p>
+      </div>
       <el-button type="primary" @click="openAdd">新增标签</el-button>
     </div>
 
-    <el-card>
-      <el-table :data="tags" v-loading="loading" stripe border style="width: 100%">
-        <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column prop="name" label="名称" min-width="120" />
-        <el-table-column label="颜色" width="120">
+    <el-card class="tag-card" shadow="never">
+      <el-table :data="tags" v-loading="loading" class="tag-table" row-key="id" style="width: 100%">
+        <el-table-column label="标签" min-width="220">
           <template #default="{ row }">
-            <el-tag :style="{ backgroundColor: row.color, borderColor: row.color, color: '#fff' }">{{ row.color }}</el-tag>
+            <div class="tag-name-cell">
+              <span class="color-dot" :style="{ backgroundColor: row.color }"></span>
+              <div>
+                <div class="tag-name">{{ row.name }}</div>
+                <div class="tag-id">ID: {{ row.id }}</div>
+              </div>
+            </div>
           </template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="180" />
-        <el-table-column label="操作" width="160" fixed="right">
+        <el-table-column label="颜色" width="180" align="center">
           <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row.id)">删除</el-button>
+            <div class="color-cell">
+              <span class="color-block" :style="{ backgroundColor: row.color }"></span>
+              <span>{{ row.color || '-' }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="预览" width="160" align="center">
+          <template #default="{ row }">
+            <el-tag :style="{ backgroundColor: row.color, borderColor: row.color, color: '#fff' }" effect="dark">
+              {{ row.name }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" min-width="180" show-overflow-tooltip />
+        <el-table-column label="操作" width="140" align="center" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openEdit(row)">编辑</el-button>
+            <el-button link type="danger" @click="handleDelete(row.id)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -112,12 +134,16 @@ onMounted(fetchData)
     </el-card>
 
     <el-dialog v-model="dialogVisible" :title="formTitle" width="500px">
-      <el-form :model="form" label-width="80px">
+      <el-form :model="form" label-width="80px" class="tag-form">
         <el-form-item label="名称">
-          <el-input v-model="form.name" />
+          <el-input v-model="form.name" placeholder="请输入标签名称" />
         </el-form-item>
         <el-form-item label="颜色">
-          <el-color-picker v-model="form.color" />
+          <div class="form-color-row">
+            <el-color-picker v-model="form.color" />
+            <el-input v-model="form.color" placeholder="#409EFF" />
+            <el-tag :style="{ backgroundColor: form.color, borderColor: form.color, color: '#fff' }">{{ form.name || '标签预览' }}</el-tag>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -131,16 +157,81 @@ onMounted(fetchData)
 <style scoped>
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
+  gap: 16px;
   margin-bottom: 16px;
 }
 .page-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
+}
+.page-header p {
+  margin: 8px 0 0;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+.tag-card {
+  border-radius: 12px;
+}
+.tag-table :deep(.el-table__header th) {
+  background: #f7f9fc;
+  color: #606266;
+  font-weight: 600;
+}
+.tag-table :deep(.el-table__row) {
+  height: 64px;
+}
+.tag-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px rgba(64, 158, 255, 0.08);
+  flex-shrink: 0;
+}
+.tag-name {
+  font-weight: 600;
+  color: #303133;
+}
+.tag-id {
+  margin-top: 4px;
+  color: #a8abb2;
+  font-size: 12px;
+}
+.color-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #909399;
+  font-size: 12px;
+}
+.color-block {
+  width: 28px;
+  height: 18px;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
 .pagination-wrap {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+}
+.form-color-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+.tag-form :deep(.el-form-item:last-child) {
+  margin-bottom: 0;
 }
 </style>

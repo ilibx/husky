@@ -9,18 +9,18 @@ import (
 )
 
 func (s *service) ListCategories(ctx context.Context) ([]model.Category, error) {
-	return s.categoryRepo.ListByType(ctx, "knowledge")
+	return s.categoryRepo.List(ctx, "")
 }
 
 func (s *service) CategoryTree(ctx context.Context) ([]model.CategoryTreeNode, error) {
-	categories, err := s.categoryRepo.ListByType(ctx, "knowledge")
+	categories, err := s.categoryRepo.List(ctx, "")
 	if err != nil {
 		return nil, err
 	}
 	return model.BuildCategoryTree(categories), nil
 }
 
-func (s *service) Ask(ctx context.Context, question string) (*model.AnswerResponse, error) {
+func (s *service) Ask(ctx context.Context, question string, modelName string, deepThinking bool, images []string) (*model.AnswerResponse, error) {
 	if question == "" {
 		return nil, fmt.Errorf("question is required")
 	}
@@ -64,14 +64,24 @@ func (s *service) Ask(ctx context.Context, question string) (*model.AnswerRespon
 
 请用中文简洁准确地回答问题。如果知识库内容不足以回答问题，请如实告知。`, contextStr, question)
 
-	chatResp, err := s.chatSvc.Chat(ctx, &llm.ChatRequest{
+	chatReq := &llm.ChatRequest{
 		Messages: []llm.ChatMessage{
 			{Role: "system", Content: "你是一个专业的企业知识库问答助手，基于提供的知识库内容回答问题。"},
-			{Role: "user", Content: prompt},
+			{Role: "user", Content: prompt, Images: images},
 		},
 		Temperature: 0.3,
 		MaxTokens:   1024,
-	})
+	}
+
+	if modelName != "" {
+		chatReq.Model = modelName
+	}
+
+	if deepThinking {
+		chatReq.ReasoningEffort = "high"
+	}
+
+	chatResp, err := s.chatSvc.Chat(ctx, chatReq)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate answer: %w", err)
 	}

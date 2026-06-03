@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElPopconfirm } from 'element-plus'
+import { Plus, Delete, EditPen, Search, Refresh } from '@element-plus/icons-vue'
 import request from '@/api/request'
 
 interface MCP {
@@ -35,8 +36,8 @@ async function fetchData() {
     const params: any = { page: page.value, page_size: pageSize.value }
     if (keyword.value) params.keyword = keyword.value
     const res: any = await request.get('/mcps', { params })
-    list.value = res.data?.data || res.data || []
-    total.value = res.data?.total || 0
+    list.value = res?.list || res?.data?.list || res?.data?.data || res?.data || []
+    total.value = res?.total || res?.data?.total || 0
   } catch {
     list.value = []
   } finally {
@@ -84,51 +85,85 @@ async function handleDelete(id: number) {
   } catch { /* cancelled */ }
 }
 
+function formatDate(val: string) {
+  if (!val) return '-'
+  return val.slice(0, 10)
+}
+
+async function toggleMCPEnabled(row: MCP, val: boolean) {
+  try {
+    await request.put(`/mcps/${row.id}`, { ...row, enabled: !!val })
+    ElMessage.success(val ? '已启用' : '已停用')
+  } catch {
+    row.enabled = !val
+  }
+}
+
 onMounted(fetchData)
 </script>
 
 <template>
-  <div>
-    <div class="page-header">
-      <h2>MCP 服务</h2>
-      <el-button type="primary" @click="openAdd">新增 MCP 服务</el-button>
+  <div class="page">
+    <div class="list-view">
+      <div class="page-header">
+        <h2>MCP 服务</h2>
+      </div>
+
+      <el-card shadow="never" class="list-card">
+        <div class="table-toolbar">
+          <div class="toolbar-left">
+            <el-input v-model="keyword" placeholder="搜索 MCP 服务..." clearable @input="onSearch" class="search-input">
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+          </div>
+          <div class="toolbar-right">
+            <el-button :icon="Refresh" circle @click="fetchData" />
+            <el-button type="primary" :icon="Plus" @click="openAdd">新增 MCP 服务</el-button>
+          </div>
+        </div>
+
+        <el-table :data="list" v-loading="loading" stripe style="width:100%" class="beauty-table" height="calc(100vh - 100px)">
+          <el-table-column prop="id" label="ID" width="64" align="center" />
+          <el-table-column prop="name" label="名称" min-width="140">
+            <template #default="{ row }"><span class="name-cell">{{ row.name }}</span></template>
+          </el-table-column>
+          <el-table-column prop="endpoint" label="服务地址" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }"><code class="endpoint-cell">{{ row.endpoint }}</code></template>
+          </el-table-column>
+          <el-table-column prop="description" label="描述" min-width="180" show-overflow-tooltip>
+            <template #default="{ row }"><span class="desc-preview">{{ row.description || '-' }}</span></template>
+          </el-table-column>
+          <el-table-column prop="enabled" label="状态" width="72" align="center">
+            <template #default="{ row }">
+              <el-switch v-model="row.enabled" size="small" active-color="#67c23a" inactive-color="#c0c4cc" @change="(val: any) => toggleMCPEnabled(row, val)" />
+            </template>
+          </el-table-column>
+          <el-table-column label="创建时间" width="108" align="center">
+            <template #default="{ row }"><span class="date-cell">{{ formatDate(row.created_at) }}</span></template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right" align="center">
+            <template #default="{ row }">
+              <div class="action-group">
+                <el-button size="small" text :icon="EditPen" @click="openEdit(row)" />
+                <el-popconfirm title="确认删除?" @confirm="handleDelete(row.id)">
+                  <template #reference><el-button size="small" text type="danger" :icon="Delete" /></template>
+                </el-popconfirm>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="pagination-wrap" v-if="total > 0">
+          <el-pagination
+            v-model:current-page="page"
+            v-model:page-size="pageSize"
+            :total="total"
+            layout="total, prev, pager, next"
+            @current-change="fetchData"
+          />
+        </div>
+      </el-card>
     </div>
-
-    <el-card>
-      <div style="margin-bottom:16px;display:flex;gap:12px">
-        <el-input v-model="keyword" placeholder="搜索 MCP 服务" style="width:300px" clearable @keyup.enter="onSearch" />
-        <el-button type="primary" @click="onSearch">搜索</el-button>
-      </div>
-
-      <el-table :data="list" v-loading="loading" stripe border style="width:100%">
-        <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column prop="name" label="名称" min-width="150" />
-        <el-table-column prop="description" label="描述" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="endpoint" label="服务地址" min-width="200" show-overflow-tooltip />
-        <el-table-column prop="enabled" label="状态" width="80">
-          <template #default="{ row }">
-            <el-tag :type="row.enabled ? 'success' : 'warning'">{{ row.enabled ? '启用' : '禁用' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="180" />
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="handleDelete(row.id)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pagination-wrap">
-        <el-pagination
-          v-model:current-page="page"
-          v-model:page-size="pageSize"
-          :total="total"
-          layout="total, prev, pager, next"
-          @current-change="fetchData"
-        />
-      </div>
-    </el-card>
 
     <el-dialog v-model="dialogVisible" :title="formTitle" width="550px">
       <el-form :model="form" label-width="100px">
@@ -154,18 +189,61 @@ onMounted(fetchData)
 </template>
 
 <style scoped>
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.list-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .page-header h2 {
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d2129;
 }
 .pagination-wrap {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
+.list-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid #e5e6eb;
+  min-height: 0;
+}
+.list-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 20px;
+}
+.table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+.toolbar-left { flex: 1; }
+.toolbar-right { display: flex; align-items: center; gap: 8px; }
+.search-input { width: 320px; }
+.beauty-table { --el-table-border-color: #f0f0f0; flex: 1; min-height: 350px; }
+.beauty-table :deep(.el-table__header th) { background: #f7f8fa; color: #4e5969; font-weight: 500; }
+.name-cell { color: #1d2129; font-weight: 500; }
+.desc-preview { color: #86909c; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+.endpoint-cell { font-size: 12px; color: #86909c; background: #f7f8fa; padding: 2px 6px; border-radius: 4px; font-family: 'SFMono-Regular', Consolas, monospace; }
+.date-cell { color: #86909c; font-size: 13px; }
+.action-group { display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; }
+.action-group .el-button { margin-left: 0; }
 </style>
