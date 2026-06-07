@@ -52,6 +52,7 @@ type Role struct {
 	Name        string `gorm:"size:50;uniqueIndex;not null" json:"name"`
 	Description string `gorm:"type:text" json:"description"`
 	Permissions string `gorm:"type:text" json:"permissions"` // JSON array of permission keys, e.g. ["ticket:create","ticket:read"]
+	Level       int    `gorm:"default:0" json:"level"`       // hierarchy level: higher = more senior (e.g. admin=100, agent=50, user=10)
 	Status      int    `gorm:"default:1" json:"status"`
 }
 

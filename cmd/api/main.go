@@ -126,22 +126,41 @@ const defaultAdminEmail = "admin@husky.local"
 const defaultAdminPassword = "admin123"
 
 func seedDefaultRoles(db *gorm.DB, log *logger.Logger) {
-	permissions, err := json.Marshal(model.DefaultAdminPermissions())
+	roles := []model.Role{
+		{
+			Name:        "admin",
+			Description: "系统管理员",
+			Permissions: mustJSON(model.DefaultAdminPermissions()),
+			Level:       100,
+			Status:      1,
+		},
+		{
+			Name:        "agent",
+			Description: "客服人员",
+			Permissions: mustJSON(model.DefaultAgentPermissions()),
+			Level:       50,
+			Status:      1,
+		},
+		{
+			Name:        "user",
+			Description: "普通用户",
+			Level:       10,
+			Status:      1,
+		},
+	}
+	for _, role := range roles {
+		if err := db.Where("name = ?", role.Name).FirstOrCreate(&role).Error; err != nil {
+			log.Warn("Failed to create default role", "role", role.Name, "error", err)
+		}
+	}
+}
+
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
 	if err != nil {
-		log.Warn("Failed to marshal default admin permissions", "error", err)
-		return
+		return "[]"
 	}
-
-	role := model.Role{
-		Name:        "admin",
-		Description: "系统管理员",
-		Permissions: string(permissions),
-		Status:      1,
-	}
-
-	if err := db.Where("name = ?", role.Name).FirstOrCreate(&role).Error; err != nil {
-		log.Warn("Failed to create default admin role", "error", err)
-	}
+	return string(b)
 }
 
 func seedDefaultAdmin(db *gorm.DB, log *logger.Logger) {

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Search, Refresh } from '@element-plus/icons-vue'
 import request from '@/api/request'
@@ -27,12 +28,31 @@ interface Task {
   }
 }
 
+const route = useRoute()
+const router = useRouter()
+
 const list = ref<Task[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 const keyword = ref('')
+const activeStatus = ref((route.query.status as string) || '')
+
+const statusTabs = [
+  { label: '待处理', value: '' },
+  { label: '进行中', value: 'running' },
+  { label: '已完成', value: 'completed' },
+  { label: '已跳过', value: 'skipped' },
+  { label: '失败', value: 'failed' },
+]
+
+function onStatusChange(status: string | undefined) {
+  activeStatus.value = status || ''
+  page.value = 1
+  router.replace({ query: { ...route.query, status: activeStatus.value || undefined } })
+  fetchData()
+}
 let searchTimer: ReturnType<typeof setTimeout>
 function onSearch() {
   clearTimeout(searchTimer)
@@ -62,6 +82,7 @@ async function fetchData() {
   try {
     const params: any = { page: page.value, page_size: pageSize.value }
     if (keyword.value) params.keyword = keyword.value
+    if (activeStatus.value) params.status = activeStatus.value
     const res: any = await request.get('/workflows/tasks', { params })
     list.value = res.data?.data || []
     total.value = res.data?.total || 0
@@ -102,9 +123,13 @@ onMounted(fetchData)
       <div class="page-header">
         <h2>我的待办</h2>
       </div>
+
       <el-card shadow="never" class="list-card">
         <div class="table-toolbar">
           <div class="toolbar-left">
+            <el-select v-model="activeStatus" placeholder="全部待办" clearable size="default" style="width:140px;margin-right:12px" @change="onStatusChange">
+              <el-option v-for="tab in statusTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
+            </el-select>
             <el-input v-model="keyword" placeholder="搜索工单标题..." clearable @input="onSearch" class="search-input">
               <template #prefix><el-icon><Search /></el-icon></template>
             </el-input>

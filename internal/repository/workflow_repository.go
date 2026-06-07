@@ -120,12 +120,16 @@ func (r *WorkflowRepository) ListFeedbackExamples(ctx context.Context, limit int
 }
 
 // ListActiveByAgent 获取某 Agent 的待处理步骤
-func (r *WorkflowRepository) ListStepsByAssignee(ctx context.Context, userID uint, offset, limit int, keyword string) ([]model.WorkflowStep, int64, error) {
+func (r *WorkflowRepository) ListStepsByAssignee(ctx context.Context, userID uint, offset, limit int, keyword, status string) ([]model.WorkflowStep, int64, error) {
 	var steps []model.WorkflowStep
 	var total int64
 
-	query := r.db.WithContext(ctx).Model(&model.WorkflowStep{}).
-		Where("assignee_id = ? AND status IN ?", userID, []string{"pending", "running"})
+	query := r.db.WithContext(ctx).Model(&model.WorkflowStep{}).Where("assignee_id = ?", userID)
+	if status != "" {
+		query = query.Where("status = ?", status)
+	} else {
+		query = query.Where("status IN ?", []string{"pending", "running"})
+	}
 	if keyword != "" {
 		query = query.Where("id IN (SELECT ws.id FROM workflow_steps ws LEFT JOIN workflows w ON w.id = ws.workflow_id LEFT JOIN tickets t ON t.id = w.ticket_id WHERE t.title ILIKE ?)", "%"+keyword+"%")
 	}

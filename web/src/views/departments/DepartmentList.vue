@@ -56,7 +56,7 @@ async function fetchParentOptions() {
 
 async function fetchUserOptions() {
   try {
-    const res: any = await request.get('/users', { params: { page: 1, page_size: 1000 } })
+    const res: any = await request.get('/users', { params: { page: 1, page_size: 200 } })
     userOptions.value = res.data?.data || []
   } catch {
     userOptions.value = []

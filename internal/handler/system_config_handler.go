@@ -1,9 +1,12 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +26,203 @@ type SystemConfigHandler struct {
 
 func NewSystemConfigHandler(repo *repository.SystemConfigRepository, dynCfg *config.DynamicConfig, log *logger.Logger) *SystemConfigHandler {
 	return &SystemConfigHandler{repo: repo, dynCfg: dynCfg, log: log}
+}
+
+type TestConnectionRequest struct {
+	Type    string `json:"type"`
+	APIKey  string `json:"api_key"`
+	BaseURL string `json:"base_url"`
+}
+
+func modelsURL(baseURL, typ string) string {
+	baseURL = strings.TrimRight(baseURL, "/")
+	hasV1 := strings.HasSuffix(baseURL, "/v1")
+	switch typ {
+	case "azure":
+		return baseURL + "/openai/deployments?api-version=2024-08-01-preview"
+	case "gemini":
+		return baseURL + "/v1/models"
+	case "claude":
+		if hasV1 {
+			return baseURL + "/models"
+		}
+		return baseURL + "/v1/models"
+	default:
+		if hasV1 {
+			return baseURL + "/models"
+		}
+		return baseURL + "/v1/models"
+	}
+}
+
+func (h *SystemConfigHandler) TestConnection(c *gin.Context) {
+	var req TestConnectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
+		return
+	}
+	if req.BaseURL == "" || req.APIKey == "" {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "base_url and api_key are required")
+		return
+	}
+
+	client := http.Client{Timeout: 15 * time.Second}
+	var httpReq *http.Request
+	var err error
+
+	url := modelsURL(req.BaseURL, req.Type)
+	if req.Type == "gemini" {
+		url += "?key=" + req.APIKey
+		httpReq, err = http.NewRequest("GET", url, nil)
+	} else if req.Type == "azure" {
+		httpReq, err = http.NewRequest("GET", url, nil)
+		if err == nil {
+			httpReq.Header.Set("api-key", req.APIKey)
+		}
+	} else {
+		httpReq, err = http.NewRequest("GET", url, nil)
+		if err == nil {
+			httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
+			if req.Type == "claude" {
+				httpReq.Header.Set("anthropic-version", "2023-06-01")
+			}
+		}
+	}
+
+	if err != nil {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, fmt.Sprintf("invalid request: %v", err))
+		return
+	}
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		httputil.Error(c, http.StatusBadGateway, errors.ErrInternal, fmt.Sprintf("连接失败: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		httputil.Success(c, gin.H{"message": "连接成功"})
+	} else {
+		body, _ := io.ReadAll(resp.Body)
+		httputil.Error(c, http.StatusBadGateway, errors.ErrInternal, fmt.Sprintf("连接成功但认证失败 (%d): %s", resp.StatusCode, string(body)))
+	}
+}
+
+func (h *SystemConfigHandler) FetchProviderModels(c *gin.Context) {
+	var req TestConnectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
+		return
+	}
+	if req.BaseURL == "" || req.APIKey == "" {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "base_url and api_key are required")
+		return
+	}
+
+	client := http.Client{Timeout: 15 * time.Second}
+	var httpReq *http.Request
+	var err error
+
+	url := modelsURL(req.BaseURL, req.Type)
+	if req.Type == "gemini" {
+		url += "?key=" + req.APIKey
+		httpReq, err = http.NewRequest("GET", url, nil)
+	} else if req.Type == "azure" {
+		httpReq, err = http.NewRequest("GET", url, nil)
+		if err == nil {
+			httpReq.Header.Set("api-key", req.APIKey)
+		}
+	} else {
+		httpReq, err = http.NewRequest("GET", url, nil)
+		if err == nil {
+			httpReq.Header.Set("Authorization", "Bearer "+req.APIKey)
+			if req.Type == "claude" {
+				httpReq.Header.Set("anthropic-version", "2023-06-01")
+			}
+		}
+	}
+
+	if err != nil {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, fmt.Sprintf("invalid request: %v", err))
+		return
+	}
+
+	h.log.Info("fetching models", "url", url, "type", req.Type)
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		httputil.Error(c, http.StatusBadGateway, errors.ErrInternal, fmt.Sprintf("获取模型列表失败: %v", err))
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, "failed to read response")
+		return
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		httputil.Error(c, http.StatusBadGateway, errors.ErrInternal, fmt.Sprintf("API 返回错误 (%d): %s", resp.StatusCode, string(body)))
+		return
+	}
+
+	h.log.Info("models API response", "body", string(body))
+
+	type modelInfo struct {
+		ID      string `json:"id"`
+		OwnedBy string `json:"owned_by"`
+	}
+
+	var models []modelInfo
+
+	switch req.Type {
+	case "gemini":
+		var result struct {
+			Models []struct {
+				Name string `json:"name"`
+			} `json:"models"`
+		}
+		if err := json.Unmarshal(body, &result); err == nil {
+			for _, m := range result.Models {
+				models = append(models, modelInfo{ID: strings.TrimPrefix(m.Name, "models/"), OwnedBy: "gemini"})
+			}
+		} else {
+			h.log.Error("failed to parse gemini response", "error", err)
+		}
+	case "azure":
+		var result struct {
+			Value []struct {
+				ID string `json:"id"`
+			} `json:"value"`
+		}
+		if err := json.Unmarshal(body, &result); err == nil {
+			for _, d := range result.Value {
+				models = append(models, modelInfo{ID: d.ID, OwnedBy: "azure"})
+			}
+		} else {
+			h.log.Error("failed to parse azure response", "error", err)
+		}
+	default:
+		var result struct {
+			Data []struct {
+				ID      string `json:"id"`
+				OwnedBy string `json:"owned_by"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(body, &result); err == nil {
+			for _, d := range result.Data {
+				models = append(models, modelInfo{ID: d.ID, OwnedBy: d.OwnedBy})
+			}
+		} else {
+			h.log.Error("failed to parse response", "error", err, "body", string(body))
+		}
+	}
+
+	if models == nil {
+		models = []modelInfo{}
+	}
+
+	httputil.Success(c, gin.H{"models": models})
 }
 
 func (h *SystemConfigHandler) GetModelCatalog(c *gin.Context) {

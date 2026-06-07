@@ -101,10 +101,16 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	agentSvc := agent.NewService(agentRepo)
 	sopSvc := agent.NewSOPService(sopRepo)
 
+	catRepo := repository.NewCategoryRepository(dbConn.DB)
 	var slaConfigSvc *ticket.SLAConfigService
 
 	// --- Register post-creation handler on ticket service ---
 	ticketSvc.OnTicketCreated(func(ctx context.Context, t *model.Ticket) {
+		if t.CategoryID != 0 {
+			if cat, err := catRepo.GetByID(ctx, t.CategoryID); err == nil && cat != nil && cat.ManagerID != nil {
+				ticketSvc.AssignTicket(ctx, t.ID, *cat.ManagerID)
+			}
+		}
 		if slaConfigSvc != nil {
 			if dueAt := slaConfigSvc.ComputeDueAt(ctx, t); dueAt != nil {
 				ticketSvc.SetDueAt(ctx, t.ID, *dueAt)
@@ -313,6 +319,8 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 		cfgRoutes.GET("/vector", systemCfgHandler.GetVectorConfig)
 		cfgRoutes.GET("/knowledge-stores", systemCfgHandler.GetKnowledgeStores)
 		cfgRoutes.GET("/lookup", systemCfgHandler.GetSystemConfigByKey)
+		cfgRoutes.POST("/test-connection", systemCfgHandler.TestConnection)
+		cfgRoutes.POST("/fetch-models", systemCfgHandler.FetchProviderModels)
 		cfgRoutes.POST("", systemCfgHandler.CreateSystemConfig)
 		cfgRoutes.PUT("/:id", systemCfgHandler.UpdateSystemConfig)
 		cfgRoutes.POST("/upsert", systemCfgHandler.UpsertSystemConfig)

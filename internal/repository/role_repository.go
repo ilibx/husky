@@ -44,6 +44,15 @@ func (r *TicketRepository) ListRoles(ctx context.Context, keyword string) ([]mod
 	return list, nil
 }
 
+// GetRoleLevel 获取角色层级
+func (r *TicketRepository) GetRoleLevel(ctx context.Context, roleName string) (int, error) {
+	var role model.Role
+	if err := r.db.WithContext(ctx).Where("name = ?", roleName).First(&role).Error; err != nil {
+		return 0, err
+	}
+	return role.Level, nil
+}
+
 // GetRole 获取单个角色
 func (r *TicketRepository) GetRole(ctx context.Context, id uint) (*model.Role, error) {
 	var role model.Role

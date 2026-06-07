@@ -43,4 +43,6 @@ type ChatResponse struct {
 const (
 	ProviderOpenAI    = "openai"
 	ProviderDashScope = "dashscope"
+	ProviderClaude    = "claude"
+	ProviderGemini    = "gemini"
 )

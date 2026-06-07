@@ -99,6 +99,7 @@ func (r *TicketRepository) List(ctx context.Context, offset, limit int, filters 
 
 	query := r.db.WithContext(ctx).Model(&model.Ticket{})
 
+	var userIDs []uint
 	for key, value := range filters {
 		if value == nil {
 			continue
@@ -109,6 +110,27 @@ func (r *TicketRepository) List(ctx context.Context, offset, limit int, filters 
 			query = query.Where("title ILIKE ? OR description ILIKE ?", q, q)
 		case "assignee_id":
 			query = query.Where("assignee_id = ?", value)
+		case "scope":
+			scope := value.(string)
+			uid := filters["scope_user_id"].(uint)
+			roleName := filters["scope_role"].(string)
+			if scope == "my" {
+				query = query.Where("assignee_id = ?", uid)
+			} else if scope == "my_team" && roleName != "" {
+				var userLevel int
+				r.db.WithContext(ctx).Model(&model.Role{}).Where("name = ?", roleName).Pluck("level", &userLevel)
+				r.db.WithContext(ctx).Model(&model.User{}).
+					Joins("JOIN roles ON roles.name = users.role").
+					Where("roles.level <= ?", userLevel).
+					Pluck("users.id", &userIDs)
+				if len(userIDs) > 0 {
+					query = query.Where("assignee_id IN ?", userIDs)
+				} else {
+					query = query.Where("assignee_id = ?", uid)
+				}
+			}
+		case "scope_user_id", "scope_role":
+			// skip — already handled in scope case
 		default:
 			if !isSafeColumn(key) {
 				continue

@@ -73,6 +73,16 @@ func (r *UserRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&model.User{}, id).Error
 }
 
+// FindByMaxRoleLevel 获取角色层级不高于指定级别的所有用户ID
+func (r *UserRepository) FindByMaxRoleLevel(ctx context.Context, level int) ([]uint, error) {
+	var ids []uint
+	err := r.db.WithContext(ctx).Model(&model.User{}).
+		Joins("JOIN roles ON roles.name = users.role").
+		Where("roles.level <= ?", level).
+		Pluck("users.id", &ids).Error
+	return ids, err
+}
+
 // List 获取用户列表
 func (r *UserRepository) List(ctx context.Context, offset, limit int, keyword string) ([]model.User, int64, error) {
 	var users []model.User

@@ -38,6 +38,9 @@
 | 飞书用户信息 | ✅ | FeishuEnricher 缓存 + 工单 metadata 注入 |
 | 缓存层 | ✅ | Redis 解耦（已降级为 NoopCache，可选启用） |
 | 仪表盘 KPI | ✅ | CSS Grid 布局，10 张统计卡片自适应排列，卡片可点击跳转对应管理页面 |
+| 角色层级 | ✅ | Role.Level 字段，admin=100/agent=50/user=10 |
+| 工单可见范围 | ✅ | 支持 scope=all/my/my_team 筛选，上级可见下级工单 |
+| 分类负责人 | ✅ | Category.ManagerID，创建工单自动分配给负责人 |
 
 ### 🔶 部分实现
 | 模块 | 状态 | 说明 |

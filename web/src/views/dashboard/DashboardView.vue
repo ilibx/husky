@@ -188,7 +188,7 @@ onMounted(async () => {
     <div v-loading="loading" class="dashboard-body">
       <!-- KPI Grid -->
       <div class="kpi-grid">
-        <el-card shadow="never" class="kpi-card">
+        <el-card shadow="never" class="kpi-card clickable" @click="goToTickets({})">
           <div class="kpi-body">
             <div class="kpi-icon" style="background:linear-gradient(135deg,#6366f1,#8b5cf6)">
               <el-icon :size="20"><Ticket /></el-icon>
@@ -199,7 +199,7 @@ onMounted(async () => {
             </div>
           </div>
         </el-card>
-        <el-card shadow="never" class="kpi-card">
+        <el-card shadow="never" class="kpi-card clickable" @click="goToTickets({ status: 'open' })">
           <div class="kpi-body">
             <div class="kpi-icon" style="background:linear-gradient(135deg,#f59e0b,#d97706)">
               <el-icon :size="20"><WarningFilled /></el-icon>
@@ -210,7 +210,7 @@ onMounted(async () => {
             </div>
           </div>
         </el-card>
-        <el-card shadow="never" class="kpi-card">
+        <el-card shadow="never" class="kpi-card clickable" @click="goToTickets({ status: 'in_progress' })">
           <div class="kpi-body">
             <div class="kpi-icon" style="background:linear-gradient(135deg,#06b6d4,#0891b2)">
               <el-icon :size="20"><Loading /></el-icon>
@@ -221,7 +221,7 @@ onMounted(async () => {
             </div>
           </div>
         </el-card>
-        <el-card shadow="never" class="kpi-card">
+        <el-card shadow="never" class="kpi-card clickable" @click="goToTickets({ status: 'resolved' })">
           <div class="kpi-body">
             <div class="kpi-icon" style="background:linear-gradient(135deg,#22c55e,#16a34a)">
               <el-icon :size="20"><Select /></el-icon>
@@ -232,7 +232,7 @@ onMounted(async () => {
             </div>
           </div>
         </el-card>
-        <el-card shadow="never" class="kpi-card">
+        <el-card shadow="never" class="kpi-card clickable" @click="goToTickets({ status: 'overdue' })">
           <div class="kpi-body">
             <div class="kpi-icon" style="background:linear-gradient(135deg,#ef4444,#dc2626)">
               <el-icon :size="20"><Clock /></el-icon>

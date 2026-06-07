@@ -47,7 +47,16 @@ func (d *DynamicConfig) InitLLM(ctx context.Context) error {
 	}
 	baseURL := dbCfg.BaseURL
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+		switch providerName {
+		case "claude":
+			baseURL = "https://api.anthropic.com"
+		case "gemini":
+			baseURL = "https://generativelanguage.googleapis.com"
+		case "dashscope":
+			baseURL = "https://dashscope.aliyuncs.com/api/v1"
+		default:
+			baseURL = "https://api.openai.com/v1"
+		}
 	}
 
 	provider, err := llm.NewProviderFromConfig(providerName, dbCfg.APIKey, baseURL)

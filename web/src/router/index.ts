@@ -168,12 +168,7 @@ const routes: RouteRecordRaw[] = [
             component: () => import('@/views/models/ModelPlatform.vue'),
             meta: { title: '平台管理', icon: 'Monitor' },
           },
-          {
-            path: 'configs',
-            name: 'ModelConfigs',
-            component: () => import('@/views/models/ModelConfig.vue'),
-            meta: { title: '模型配置', icon: 'Monitor' },
-          },
+
         ],
       },
     ],

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, ElPopconfirm } from 'element-plus'
-import { Search, Plus, EditPen, Delete, Refresh, View } from '@element-plus/icons-vue'
+import { Search, Plus, EditPen, Delete, Refresh, View, User } from '@element-plus/icons-vue'
 import request from '@/api/request'
 
 const route = useRoute()
+const router = useRouter()
 
 interface Ticket {
   id: number; ticket_no: string; title: string; status: string; priority: string
@@ -21,6 +22,24 @@ const page = ref(1)
 const pageSize = ref(20)
 const loading = ref(false)
 const keyword = ref('')
+const activeStatus = ref((route.query.status as string) || '')
+
+const statusTabs = [
+  { label: '全部', value: '' },
+  { label: '待处理', value: 'open' },
+  { label: '处理中', value: 'in_progress' },
+  { label: '待确认', value: 'pending' },
+  { label: '已解决', value: 'resolved' },
+  { label: '已关闭', value: 'closed' },
+  { label: '已逾期', value: 'overdue' },
+]
+
+function onStatusChange(status: string | undefined) {
+  activeStatus.value = status || ''
+  page.value = 1
+  router.replace({ query: { ...route.query, status: activeStatus.value || undefined } })
+  fetchData()
+}
 let searchTimer: ReturnType<typeof setTimeout>
 function onSearch() {
   clearTimeout(searchTimer)
@@ -36,6 +55,26 @@ const tagSelectVisible = ref(false)
 const selectedTagIDs = ref<number[]>([])
 
 const categories = ref<Category[]>([])
+const assignVisible = ref(false)
+const assignTarget = ref<number>(0)
+const assignUserId = ref<number | null>(null)
+const users = ref<{ id: number; username: string }[]>([])
+
+function openAssign(row: Ticket) {
+  assignTarget.value = row.id
+  assignUserId.value = null
+  assignVisible.value = true
+}
+
+async function handleAssign() {
+  if (!assignUserId.value) return
+  try {
+    await request.post(`/tickets/${assignTarget.value}/assign`, { assignee_id: assignUserId.value })
+    ElMessage.success('指派成功')
+    assignVisible.value = false
+    fetchData()
+  } catch { /* handled */ }
+}
 
 const createVisible = ref(false)
 const createForm = ref({ title: '', description: '', priority: 'medium', category_id: null as number | null })
@@ -49,7 +88,7 @@ async function fetchData() {
     if (keyword.value) params.keyword = keyword.value
     if (route.query.priority) params.priority = route.query.priority
     if (route.query.source) params.source = route.query.source
-    if (route.query.status) params.status = route.query.status
+    if (activeStatus.value) params.status = activeStatus.value
     const res: any = await request.get('/tickets', { params })
     list.value = res.data?.data || res.data || []
     total.value = res.data?.total || 0
@@ -206,7 +245,14 @@ function slaLabel(s: string | undefined) { return (s && slaLabelMap[s]) || '-' }
 
 function tagColor(c: string) { return c || '#409eff' }
 
-onMounted(() => { fetchData(); fetchMeta() })
+async function fetchUsers() {
+  try {
+    const res: any = await request.get('/users', { params: { page: 1, page_size: 200 } })
+    users.value = (res.data?.data || []).map((u: any) => ({ id: u.id, username: u.username }))
+  } catch { /* ignore */ }
+}
+
+onMounted(() => { fetchData(); fetchMeta(); fetchUsers() })
 </script>
 
 <template>
@@ -219,6 +265,9 @@ onMounted(() => { fetchData(); fetchMeta() })
       <el-card shadow="never" class="list-card">
         <div class="table-toolbar">
           <div class="toolbar-left">
+            <el-select v-model="activeStatus" placeholder="全部工单" clearable size="default" style="width:130px;margin-right:12px" @change="onStatusChange">
+              <el-option v-for="tab in statusTabs" :key="tab.value" :label="tab.label" :value="tab.value" />
+            </el-select>
             <el-input v-model="keyword" placeholder="搜索工单标题..." clearable @input="onSearch" class="search-input">
               <template #prefix><el-icon><Search /></el-icon></template>
             </el-input>
@@ -247,6 +296,9 @@ onMounted(() => { fetchData(); fetchMeta() })
             </template>
           </el-table-column>
           <el-table-column prop="source" label="来源" width="100" align="center" />
+          <el-table-column label="分类" width="120" align="center">
+            <template #default="{ row }">{{ row.category?.name || '-' }}</template>
+          </el-table-column>
           <el-table-column prop="sla_status" label="SLA" width="90" align="center">
             <template #default="{ row }">
               <el-tag :type="slaType(row.sla_status)" size="small" effect="plain">{{ slaLabel(row.sla_status) }}</el-tag>
@@ -254,10 +306,11 @@ onMounted(() => { fetchData(); fetchMeta() })
           </el-table-column>
           <el-table-column prop="assignee_name" label="处理人" width="120" align="center" />
           <el-table-column prop="created_at" label="创建时间" width="170" />
-          <el-table-column label="操作" width="140" fixed="right" align="center">
+          <el-table-column label="操作" width="180" fixed="right" align="center">
             <template #default="{ row }">
               <div class="action-group">
                 <el-button size="small" text :icon="View" @click="viewDetail(row)" />
+                <el-button size="small" text :icon="User" @click="openAssign(row)" />
                 <el-button size="small" text :icon="EditPen" @click="openEdit(row)" />
                 <el-popconfirm title="确认删除?" @confirm="handleDelete(row.id)">
                   <template #reference><el-button size="small" text type="danger" :icon="Delete" /></template>
@@ -400,6 +453,20 @@ onMounted(() => { fetchData(); fetchMeta() })
       <template #footer>
         <el-button @click="tagSelectVisible = false">取消</el-button>
         <el-button type="primary" @click="saveTags">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="assignVisible" title="指派工单" width="400px">
+      <el-form>
+        <el-form-item label="处理人">
+          <el-select v-model="assignUserId" placeholder="请选择处理人" filterable style="width:100%">
+            <el-option v-for="u in users" :key="u.id" :label="u.username" :value="u.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="assignVisible = false">取消</el-button>
+        <el-button type="primary" :disabled="!assignUserId" @click="handleAssign">确认指派</el-button>
       </template>
     </el-dialog>
   </div>

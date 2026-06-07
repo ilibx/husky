@@ -65,6 +65,9 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 		return
 	}
 
+	userID, _ := c.Get("user_id")
+	role, _ := c.Get("role")
+
 	filters := make(map[string]interface{})
 	if status := c.Query("status"); status != "" {
 		filters["status"] = status
@@ -82,6 +85,19 @@ func (h *TicketHandler) ListTickets(c *gin.Context) {
 	}
 	if keyword := c.Query("q"); keyword != "" {
 		filters["keyword"] = keyword
+	}
+
+	// scope=my → only assigned to current user
+	// scope=my_team → current user + subordinates by role level
+	// scope=all or empty → all tickets (admin default)
+	if scope := c.Query("scope"); scope != "" {
+		filters["scope"] = scope
+		if uid, ok := userID.(uint); ok {
+			filters["scope_user_id"] = uid
+		}
+		if r, ok := role.(string); ok {
+			filters["scope_role"] = r
+		}
 	}
 
 	tickets, total, err := h.ticketService.ListTickets(c.Request.Context(), offset, limit, filters)

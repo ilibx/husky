@@ -17,7 +17,7 @@
 | 操作 | API | 说明 |
 |------|-----|------|
 | 创建工单 | `POST /api/v1/tickets` | 自动生单号 TK + 日期 + UUID |
-| 工单列表 | `GET /api/v1/tickets` | 支持 status/priority/source 筛选 |
+| 工单列表 | `GET /api/v1/tickets` | 支持 status/priority/source/category 筛选 |
 | 工单详情 | `GET /api/v1/tickets/:id` | 包含评论、附件、操作日志 |
 | 更新工单 | `PUT /api/v1/tickets/:id` | 验证状态转换合法性 |
 | 删除工单 | `DELETE /api/v1/tickets/:id` | 软删除 |
@@ -103,6 +103,7 @@ open ──→ in_progress ──→ pending ──→ resolved ──→ closed
 |------|-----|------|
 | 分类列表 | `GET /api/v1/categories` | 认证用户 |
 | 创建/更新/删除 | `POST/PUT/DELETE` | 管理员 |
+| 分类负责人 | `manager_id` 字段 | 创建工单时自动分配给分类负责人 |
 
 ### 标签管理
 
@@ -254,7 +255,7 @@ open ──→ in_progress ──→ pending ──→ resolved ──→ closed
 | 工作流列表 | `GET /api/v1/workflows` | 支持按 ticket_id/status 筛选 |
 | 工作流详情 | `GET /api/v1/workflows/:id` | 包含所有步骤 |
 | 完成人工步骤 | `POST /api/v1/workflows/steps/:stepId/complete` | 需传入 result |
-| 待办步骤 | `GET /api/v1/workflows/tasks` | 当前用户的 pending 人工步骤 |
+| 待办步骤 | `GET /api/v1/workflows/tasks` | 当前用户的人工步骤，支持 status 筛选 |
 
 **SOP 步骤类型：**
 
@@ -274,6 +275,8 @@ Admin UI 是一个嵌入式单页应用，通过 Go embed 编译进二进制，�
 | 访问地址 | `GET /admin` |
 | 登录 | 使用 JWT 认证，登录后管理工单/知识库/Agent/SOP/用户等 |
 | 仪表盘 | 工单概览、状态分布、渠道统计，KPI 卡片可点击跳转管理页面 |
+| 工单列表 | 支持 scope=all/my/my_team 筛选，按角色层级控制可见范围 |
+| 分类管理 | 支持设置负责人，新建工单自动分配给分类负责人 |
 
 ### 数据库迁移
 

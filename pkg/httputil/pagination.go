@@ -19,8 +19,8 @@ func ParsePagination(c *gin.Context) (offset, limit int, ok bool) {
 			return 0, 0, false
 		}
 		limit, err = strconv.Atoi(pageSizeStr)
-		if err != nil || limit <= 0 || limit > 200 {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size (must be 1-200)"})
+		if err != nil || limit <= 0 || limit > 10000 {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid page_size (must be 1-10000)"})
 			return 0, 0, false
 		}
 		return (page - 1) * limit, limit, true
@@ -41,8 +41,8 @@ func ParsePagination(c *gin.Context) (offset, limit int, ok bool) {
 	}
 
 	limit, err = strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 || limit > 200 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit (must be 1-200)"})
+	if err != nil || limit <= 0 || limit > 10000 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit (must be 1-10000)"})
 		return 0, 0, false
 	}
 

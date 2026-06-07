@@ -50,6 +50,10 @@ func NewProviderFromConfig(providerName, apiKey, baseURL string) (EmbeddingProvi
 		return NewOpenAIProvider(apiKey, baseURL, ""), nil
 	case ProviderDashScope:
 		return NewDashScopeProvider(apiKey, baseURL, ""), nil
+	case ProviderClaude:
+		return NewClaudeProvider(apiKey, baseURL, ""), nil
+	case ProviderGemini:
+		return NewGeminiProvider(apiKey, baseURL, ""), nil
 	default:
 		return nil, fmt.Errorf("unsupported LLM provider: %s", providerName)
 	}

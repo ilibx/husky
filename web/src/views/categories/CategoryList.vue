@@ -10,10 +10,18 @@ interface Category {
   sort_order: number
   status: number
   description: string
+  manager_id?: number | null
+  manager?: { id: number; username: string } | null
   children?: Category[]
 }
 
+interface UserOption {
+  id: number
+  username: string
+}
+
 const flatList = ref<Category[]>([])
+const users = ref<UserOption[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const editingId = ref<number | null>(null)
@@ -23,6 +31,7 @@ const form = ref({
   sort_order: 0,
   status: 1,
   description: '',
+  manager_id: null as number | null,
 })
 const formSubtitle = ref('')
 
@@ -87,6 +96,7 @@ function openAdd(parentId: number | null = null) {
     sort_order: 0,
     status: 1,
     description: '',
+    manager_id: null,
   }
   dialogVisible.value = true
 }
@@ -100,6 +110,7 @@ function openEdit(row: Category) {
     sort_order: row.sort_order,
     status: row.status,
     description: row.description,
+    manager_id: row.manager_id ?? null,
   }
   dialogVisible.value = true
 }
@@ -148,7 +159,14 @@ async function fetchData() {
   }
 }
 
-onMounted(fetchData)
+async function fetchUsers() {
+  try {
+    const res: any = await request.get('/users', { params: { page: 1, page_size: 200 } })
+    users.value = (res.data?.data || []).map((u: any) => ({ id: u.id, username: u.username }))
+  } catch { /* ignore */ }
+}
+
+onMounted(() => { fetchData(); fetchUsers() })
 </script>
 
 <template>
@@ -174,6 +192,9 @@ onMounted(fetchData)
             <template #default="{ row }">
               <el-tag :type="row.status === 1 ? 'success' : 'info'" size="small" effect="plain">{{ row.status === 1 ? '启用' : '禁用' }}</el-tag>
             </template>
+          </el-table-column>
+          <el-table-column label="负责人" width="120" align="center">
+            <template #default="{ row }">{{ row.manager?.username || '-' }}</template>
           </el-table-column>
           <el-table-column label="操作" width="240" fixed="right" align="center">
             <template #default="{ row }">
@@ -205,6 +226,11 @@ onMounted(fetchData)
           </el-form-item>
           <el-form-item label="排序值">
             <el-input-number v-model="form.sort_order" :min="0" style="width: 100%" />
+          </el-form-item>
+          <el-form-item label="负责人">
+            <el-select v-model="form.manager_id" clearable placeholder="请选择负责人" filterable style="width: 100%">
+              <el-option v-for="u in users" :key="u.id" :label="u.username" :value="u.id" />
+            </el-select>
           </el-form-item>
           <el-form-item label="状态">
             <el-switch

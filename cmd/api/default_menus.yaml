@@ -83,9 +83,7 @@ menus:
       - name: 平台管理
         path: /models/platforms
         sort: 1
-      - name: 模型配置
-        path: /models/configs
-        sort: 2
+
 
   - name: 系统管理
     icon: Setting

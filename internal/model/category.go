@@ -6,6 +6,7 @@ type CreateCategoryRequest struct {
 	Description string `json:"description,omitempty"`
 	ParentID    *uint  `json:"parent_id,omitempty"`
 	SortOrder   int    `json:"sort_order,omitempty"`
+	ManagerID   *uint  `json:"manager_id,omitempty"`
 }
 
 // UpdateCategoryRequest 更新分类请求
@@ -14,6 +15,7 @@ type UpdateCategoryRequest struct {
 	Description string `json:"description,omitempty"`
 	ParentID    *uint  `json:"parent_id,omitempty"`
 	SortOrder   int    `json:"sort_order,omitempty"`
+	ManagerID   *uint  `json:"manager_id,omitempty"`
 }
 
 // Category 系统统一分类
@@ -26,9 +28,11 @@ type Category struct {
 	SortOrder   int    `gorm:"default:0" json:"sort_order"`
 	Status      int    `gorm:"default:1" json:"status"` // 1: 激活，0: 禁用
 	Type        string `gorm:"size:50;default:'system'" json:"type"`
+	ManagerID   *uint  `json:"manager_id,omitempty"`     // 分类负责人
 
 	Parent   *Category  `gorm:"foreignKey:ParentID" json:"parent,omitempty"`
 	Children []Category `gorm:"foreignKey:ParentID" json:"children,omitempty"`
+	Manager  *User      `gorm:"foreignKey:ManagerID" json:"manager,omitempty"`
 }
 
 // CategoryTreeNode 分类树节点

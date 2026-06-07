@@ -44,6 +44,7 @@ func (s *categoryService) Create(ctx context.Context, req *model.CreateCategoryR
 		Description: req.Description,
 		ParentID:    req.ParentID,
 		SortOrder:   req.SortOrder,
+		ManagerID:   req.ManagerID,
 		Status:      1,
 		Type:        "system",
 	}
@@ -99,6 +100,9 @@ func (s *categoryService) Update(ctx context.Context, id uint, req *model.Update
 	}
 	if req.SortOrder != 0 {
 		cat.SortOrder = req.SortOrder
+	}
+	if req.ManagerID != nil {
+		cat.ManagerID = req.ManagerID
 	}
 
 	exists, err := s.catRepo.ExistsByNameAndParent(ctx, cat.Name, cat.ParentID, id)

@@ -78,7 +78,8 @@ func (h *CRUDHandler) PendingSteps(c *gin.Context) {
 	}
 
 	keyword := c.Query("keyword")
-	steps, total, err := h.workflowSvc.ListPendingSteps(c.Request.Context(), userID.(uint), offset, limit, keyword)
+	status := c.Query("status")
+	steps, total, err := h.workflowSvc.ListPendingSteps(c.Request.Context(), userID.(uint), offset, limit, keyword, status)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
