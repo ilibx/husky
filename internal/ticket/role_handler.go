@@ -85,6 +85,20 @@ func (h *TicketHandler) DeleteRole(c *gin.Context) {
 		return
 	}
 
+	role, err := h.ticketService.GetRole(c.Request.Context(), id)
+	if err != nil {
+		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
+		return
+	}
+	if role == nil {
+		httputil.Error(c, http.StatusNotFound, errors.ErrNotFound, "role not found")
+		return
+	}
+	if role.Name == "admin" {
+		httputil.Error(c, http.StatusForbidden, errors.ErrForbidden, "admin role cannot be deleted")
+		return
+	}
+
 	if err := h.ticketService.DeleteRole(c.Request.Context(), id); err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
@@ -92,4 +106,3 @@ func (h *TicketHandler) DeleteRole(c *gin.Context) {
 
 	c.Status(http.StatusNoContent)
 }
-

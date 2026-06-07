@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElPopconfirm } from 'element-plus'
+import { Search, Plus, Refresh, EditPen, Delete, View } from '@element-plus/icons-vue'
 import { Marked } from 'marked'
 import request from '@/api/request'
 
@@ -64,9 +65,10 @@ async function fetchData() {
   }
 }
 
+let searchTimer: ReturnType<typeof setTimeout>
 function onSearch() {
-  page.value = 1
-  fetchData()
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => { page.value = 1; fetchData() }, 300)
 }
 
 const sourceLabel = (t: string) => {
@@ -87,6 +89,7 @@ function openEdit(row: Knowledge) {
 }
 
 function openPreview(row: Knowledge) {
+  handleView(row)
   previewItem.value = row
   previewVisible.value = true
 }
@@ -204,58 +207,68 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <div class="page-header">
-      <h2>文档库管理</h2>
+  <div class="page">
+    <div class="list-view">
+      <div class="page-header">
+        <h2>文档库管理</h2>
+      </div>
+
+      <el-card shadow="never" class="list-card">
+        <div class="table-toolbar">
+          <div class="toolbar-left">
+            <el-input v-model="keyword" placeholder="搜索关键词..." clearable @input="onSearch" class="search-input">
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+          </div>
+          <div class="toolbar-right">
+            <el-button :icon="Refresh" circle @click="fetchData" />
+            <el-button @click="handleExport">导出 CSV</el-button>
+            <el-button @click="triggerImport">导入 CSV</el-button>
+            <el-button :loading="uploadLoading" @click="triggerDocUpload">上传文档</el-button>
+            <el-button type="primary" :icon="Plus" @click="openAdd">新增条目</el-button>
+            <input ref="fileInput" type="file" accept=".csv" style="display:none" @change="handleImport" />
+            <input ref="docFileInput" type="file" accept=".md,.txt,.pdf,.doc,.docx,.epub" style="display:none" @change="handleDocUpload" />
+          </div>
+        </div>
+
+        <el-table :data="list" v-loading="loading" stripe style="width:100%" class="beauty-table" height="calc(100vh - 100px)">
+          <el-table-column prop="id" label="ID" width="64" align="center" />
+          <el-table-column prop="title" label="标题" min-width="150" show-overflow-tooltip>
+            <template #default="{ row }"><span class="name-cell">{{ row.title }}</span></template>
+          </el-table-column>
+          <el-table-column label="来源" width="86" align="center">
+            <template #default="{ row }"><el-tag size="small" effect="plain">{{ sourceLabel(row.source_type) }}</el-tag></template>
+          </el-table-column>
+          <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip>
+            <template #default="{ row }"><span class="desc-preview">{{ row.content?.length > 80 ? row.content.slice(0, 80) + '...' : row.content || '-' }}</span></template>
+          </el-table-column>
+          <el-table-column prop="category" label="分类" width="120" show-overflow-tooltip />
+          <el-table-column prop="tags" label="标签" width="130" show-overflow-tooltip />
+          <el-table-column prop="status" label="状态" width="72" align="center">
+            <template #default="{ row }">
+              <el-tag :type="row.status === 'active' ? 'success' : 'warning'" size="small" effect="plain">{{ row.status === 'active' ? '已发布' : '已归档' }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="view_count" label="浏览" width="70" align="center" />
+          <el-table-column prop="created_at" label="创建时间" width="170" />
+          <el-table-column label="操作" width="140" fixed="right" align="center">
+            <template #default="{ row }">
+              <div class="action-group">
+                <el-button size="small" text :icon="View" @click.stop="openPreview(row)" />
+                <el-button size="small" text :icon="EditPen" @click.stop="openEdit(row)" />
+                <el-popconfirm title="确认删除?" @confirm="handleDelete(row.id)">
+                  <template #reference><el-button size="small" text type="danger" :icon="Delete" @click.stop /></template>
+                </el-popconfirm>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+
+        <div class="pagination-wrap" v-if="total > 0">
+          <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" @current-change="fetchData" />
+        </div>
+      </el-card>
     </div>
-
-    <el-card>
-      <div style="margin-bottom:16px;display:flex;justify-content:space-between">
-        <div style="display:flex;gap:12px">
-          <el-input v-model="keyword" placeholder="搜索关键词" style="width:300px" clearable @keyup.enter="onSearch" />
-          <el-button type="primary" @click="onSearch">搜索</el-button>
-        </div>
-        <div>
-          <el-button @click="handleExport">导出 CSV</el-button>
-          <el-button @click="triggerImport">导入 CSV</el-button>
-          <el-button :loading="uploadLoading" @click="triggerDocUpload">上传文档</el-button>
-          <el-button type="primary" @click="openAdd">新增条目</el-button>
-          <input ref="fileInput" type="file" accept=".csv" style="display:none" @change="handleImport" />
-          <input ref="docFileInput" type="file" accept=".md,.txt,.pdf,.doc,.docx,.epub" style="display:none" @change="handleDocUpload" />
-        </div>
-      </div>
-
-      <el-table :data="list" v-loading="loading" stripe border style="width:100%" @row-click="handleView">
-        <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column prop="title" label="标题" min-width="150" show-overflow-tooltip />
-        <el-table-column label="来源" width="100">
-          <template #default="{ row }"><el-tag size="small">{{ sourceLabel(row.source_type) }}</el-tag></template>
-        </el-table-column>
-        <el-table-column prop="content" label="内容" min-width="200" show-overflow-tooltip>
-          <template #default="{ row }">{{ row.content?.length > 80 ? row.content.slice(0, 80) + '...' : row.content }}</template>
-        </el-table-column>
-        <el-table-column prop="category" label="分类" width="120" show-overflow-tooltip />
-        <el-table-column prop="tags" label="标签" width="150" show-overflow-tooltip />
-        <el-table-column prop="status" label="状态" width="80">
-          <template #default="{ row }">
-            <el-tag :type="row.status === 'active' ? 'success' : 'warning'">{{ row.status === 'active' ? '已发布' : '已归档' }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="view_count" label="浏览" width="70" />
-        <el-table-column prop="created_at" label="创建时间" width="180" />
-        <el-table-column label="操作" width="180" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click.stop="openPreview(row)">预览</el-button>
-            <el-button size="small" @click.stop="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click.stop="handleDelete(row.id)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-
-      <div class="pagination-wrap">
-        <el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, prev, pager, next" @current-change="fetchData" />
-      </div>
-    </el-card>
 
     <el-dialog v-model="dialogVisible" :title="formTitle" width="700px">
       <el-form :model="form" label-width="80px">
@@ -311,20 +324,105 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.list-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .page-header h2 {
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d2129;
 }
 .pagination-wrap {
   margin-top: 16px;
   display: flex;
   justify-content: flex-end;
+  flex-shrink: 0;
 }
+.list-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid #e5e6eb;
+  min-height: 0;
+}
+.list-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 20px;
+}
+.table-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.toolbar-left {
+  flex: 1;
+}
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.search-input {
+  width: 320px;
+}
+.beauty-table {
+  --el-table-border-color: #f0f0f0;
+  flex: 1;
+  min-height: 350px;
+}
+.beauty-table :deep(.el-table__header th) {
+  background: #f7f8fa;
+  color: #4e5969;
+  font-weight: 500;
+}
+.name-cell {
+  color: #1d2129;
+  font-weight: 500;
+}
+.desc-preview {
+  color: #86909c;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+.action-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+.action-group .el-button {
+  margin-left: 0;
+}
+
+/* Preview modal styles */
 .preview-content h2 {
   margin: 0 0 12px 0;
 }

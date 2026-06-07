@@ -255,7 +255,7 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	know.Use(auth.AuthMiddleware())
 	setupKnowledgeRoutes(know, knowledgeHandler)
 
-	sop := v1.Group("/sop")
+	sop := v1.Group("/sops")
 	sop.Use(auth.AuthMiddleware())
 	setupSOPRoutes(sop, agentHandler)
 
@@ -307,6 +307,7 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 	cfgRoutes.Use(auth.AuthMiddleware(), auth.RBACMiddleware("admin"))
 	{
 		cfgRoutes.GET("", systemCfgHandler.ListSystemConfigs)
+		cfgRoutes.GET("/model-catalog", systemCfgHandler.GetModelCatalog)
 		cfgRoutes.GET("/:id", systemCfgHandler.GetSystemConfig)
 		cfgRoutes.GET("/llm", systemCfgHandler.GetLLMConfig)
 		cfgRoutes.GET("/vector", systemCfgHandler.GetVectorConfig)
@@ -325,6 +326,7 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 		menus.GET("", menuHandler.GetMenus) // returns menus for current role (all auth users)
 		menus.GET("/all", auth.RBACMiddleware("admin"), menuHandler.ListAllMenus)
 		menus.POST("", auth.RBACMiddleware("admin"), menuHandler.CreateMenu)
+		menus.PUT("/roles/:role/permissions", auth.RBACMiddleware("admin"), menuHandler.UpdateRoleMenus)
 		menus.PUT("/:id", auth.RBACMiddleware("admin"), menuHandler.UpdateMenu)
 		menus.DELETE("/:id", auth.RBACMiddleware("admin"), menuHandler.DeleteMenu)
 	}

@@ -6,10 +6,12 @@ import (
 
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/internal/repository"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserService 用户管理服务接口
 type UserService interface {
+	Create(ctx context.Context, req *model.CreateUserRequest) (*model.User, error)
 	List(ctx context.Context, offset, limit int, keyword string) ([]model.User, int64, error)
 	GetByID(ctx context.Context, id uint) (*model.User, error)
 	Update(ctx context.Context, id uint, req *model.UpdateUserRequest) (*model.User, error)
@@ -24,6 +26,45 @@ type userService struct {
 // NewUserService 创建用户管理服务
 func NewUserService(userRepo *repository.UserRepository) UserService {
 	return &userService{userRepo: userRepo}
+}
+
+func (s *userService) validateRole(ctx context.Context, role string) error {
+	exists, err := s.userRepo.RoleExists(ctx, role)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return fmt.Errorf("invalid role: %s", role)
+	}
+	return nil
+}
+
+func (s *userService) Create(ctx context.Context, req *model.CreateUserRequest) (*model.User, error) {
+	if req.Email == "" || req.Password == "" || req.Username == "" {
+		return nil, fmt.Errorf("email, password and username are required")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+	role := req.Role
+	if role == "" {
+		role = "user"
+	}
+	if err := s.validateRole(ctx, role); err != nil {
+		return nil, err
+	}
+	user := &model.User{
+		Email:    req.Email,
+		Username: req.Username,
+		Password: string(hash),
+		Role:     role,
+		Status:   1,
+	}
+	if err := s.userRepo.Create(ctx, user); err != nil {
+		return nil, err
+	}
+	return user, nil
 }
 
 func (s *userService) List(ctx context.Context, offset, limit int, keyword string) ([]model.User, int64, error) {
@@ -59,6 +100,12 @@ func (s *userService) Update(ctx context.Context, id uint, req *model.UpdateUser
 	if req.Phone != "" {
 		user.Phone = req.Phone
 	}
+	if req.Role != "" {
+		if err := s.validateRole(ctx, req.Role); err != nil {
+			return nil, err
+		}
+		user.Role = req.Role
+	}
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
@@ -71,9 +118,8 @@ func (s *userService) Delete(ctx context.Context, id uint) error {
 }
 
 func (s *userService) ChangeRole(ctx context.Context, id uint, role string) error {
-	validRoles := map[string]bool{"user": true, "admin": true, "agent": true}
-	if !validRoles[role] {
-		return fmt.Errorf("invalid role: %s", role)
+	if err := s.validateRole(ctx, role); err != nil {
+		return err
 	}
 
 	user, err := s.userRepo.GetByID(ctx, id)

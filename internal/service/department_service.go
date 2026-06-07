@@ -12,7 +12,7 @@ import (
 type DepartmentService interface {
 	Create(ctx context.Context, req *model.CreateDepartmentRequest) (*model.Department, error)
 	GetByID(ctx context.Context, id uint) (*model.Department, error)
-	List(ctx context.Context, keyword string) ([]model.Department, error)
+	List(ctx context.Context, offset, limit int, keyword string) ([]model.Department, int64, error)
 	Update(ctx context.Context, id uint, req *model.UpdateDepartmentRequest) (*model.Department, error)
 	Delete(ctx context.Context, id uint) error
 }
@@ -62,8 +62,8 @@ func (s *departmentService) GetByID(ctx context.Context, id uint) (*model.Depart
 	return dept, nil
 }
 
-func (s *departmentService) List(ctx context.Context, keyword string) ([]model.Department, error) {
-	return s.deptRepo.List(ctx, keyword)
+func (s *departmentService) List(ctx context.Context, offset, limit int, keyword string) ([]model.Department, int64, error) {
+	return s.deptRepo.List(ctx, offset, limit, keyword)
 }
 
 func (s *departmentService) Update(ctx context.Context, id uint, req *model.UpdateDepartmentRequest) (*model.Department, error) {

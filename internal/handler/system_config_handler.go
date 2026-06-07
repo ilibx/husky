@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/husky/husky/internal/config"
@@ -21,6 +23,26 @@ type SystemConfigHandler struct {
 
 func NewSystemConfigHandler(repo *repository.SystemConfigRepository, dynCfg *config.DynamicConfig, log *logger.Logger) *SystemConfigHandler {
 	return &SystemConfigHandler{repo: repo, dynCfg: dynCfg, log: log}
+}
+
+func (h *SystemConfigHandler) GetModelCatalog(c *gin.Context) {
+	client := http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get("https://models.dev/api.json")
+	if err != nil {
+		httputil.Error(c, http.StatusBadGateway, errors.ErrInternal, "failed to fetch model catalog")
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		httputil.Error(c, http.StatusBadGateway, errors.ErrInternal, "failed to fetch model catalog")
+		return
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		httputil.Error(c, http.StatusBadGateway, errors.ErrInternal, "failed to read model catalog")
+		return
+	}
+	c.Data(http.StatusOK, "application/json; charset=utf-8", body)
 }
 
 func (h *SystemConfigHandler) ListSystemConfigs(c *gin.Context) {

@@ -19,6 +19,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/DashboardView.vue'),
         meta: { title: '仪表盘', icon: 'Odometer' },
       },
+      {
+        path: 'external-frame',
+        name: 'ExternalFrame',
+        component: () => import('@/views/external/ExternalFrame.vue'),
+        meta: { title: '外部页面' },
+      },
       // ---- 工单管理 ----
       {
         path: 'tickets',
@@ -113,12 +119,6 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/categories/CategoryList.vue'),
         meta: { title: '分类管理', icon: 'FolderOpened' },
       },
-      {
-        path: 'tags',
-        name: 'Tags',
-        component: () => import('@/views/tags/TagList.vue'),
-        meta: { title: '标签管理', icon: 'PriceTag' },
-      },
       // ---- 通知管理 ----
       {
         path: 'notifications',
@@ -187,7 +187,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to, _from, next) => {
-  document.title = `${to.meta.title as string} - 工单管理系统`
+  document.title = `${to.meta.title as string} - 智能工单系统`
   if (to.meta.noAuth) return next()
   if (!getToken()) return next('/login')
   // Load user info if not loaded yet

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -69,9 +70,11 @@ func main() {
 	}
 	logInstance.Info("Database migration completed")
 
-	// 初始化默认管理员账号
+	// 初始化默认数据
+	seedDefaultRoles(db, logInstance)
 	seedDefaultAdmin(db, logInstance)
 	seedDefaultMenus(db, logInstance)
+	seedDefaultAgentAssets(db, logInstance)
 
 	// 创建数据库连接包装
 	dbConn := &repository.DatabaseConnection{
@@ -122,6 +125,25 @@ func main() {
 const defaultAdminEmail = "admin@husky.local"
 const defaultAdminPassword = "admin123"
 
+func seedDefaultRoles(db *gorm.DB, log *logger.Logger) {
+	permissions, err := json.Marshal(model.DefaultAdminPermissions())
+	if err != nil {
+		log.Warn("Failed to marshal default admin permissions", "error", err)
+		return
+	}
+
+	role := model.Role{
+		Name:        "admin",
+		Description: "系统管理员",
+		Permissions: string(permissions),
+		Status:      1,
+	}
+
+	if err := db.Where("name = ?", role.Name).FirstOrCreate(&role).Error; err != nil {
+		log.Warn("Failed to create default admin role", "error", err)
+	}
+}
+
 func seedDefaultAdmin(db *gorm.DB, log *logger.Logger) {
 	var count int64
 	db.Model(&model.User{}).Where("role = ?", "admin").Count(&count)
@@ -153,7 +175,7 @@ func seedDefaultAdmin(db *gorm.DB, log *logger.Logger) {
 		"password", defaultAdminPassword,
 		"role", "admin",
 		"IMPORTANT", "Change this password immediately!")
-	}
+}
 
 func seedDefaultMenus(db *gorm.DB, log *logger.Logger) {
 	var count int64
@@ -206,4 +228,112 @@ func seedDefaultMenus(db *gorm.DB, log *logger.Logger) {
 	create(nil, mf.Menus)
 
 	log.Info("Default menus seeded successfully")
+}
+
+func seedDefaultAgentAssets(db *gorm.DB, log *logger.Logger) {
+	adminID := defaultCreatorID(db)
+	seedDefaultCustomerServiceAgent(db, log, adminID)
+	seedDefaultCustomerServiceSkill(db, log, adminID)
+	seedDefaultCustomerServiceSOP(db, log, adminID)
+}
+
+func defaultCreatorID(db *gorm.DB) uint {
+	var user model.User
+	if err := db.Where("email = ?", defaultAdminEmail).First(&user).Error; err == nil {
+		return user.ID
+	}
+	return 1
+}
+
+func seedDefaultCustomerServiceAgent(db *gorm.DB, log *logger.Logger, createdBy uint) {
+	agent := model.Agent{
+		Name:        "默认客服 Agent",
+		Description: "面向客户咨询、故障排查、配置核对和工单回复的默认客服 Agent。",
+		Type:        "llm",
+		Config:      `{"trigger_on":"ticket_created","role":"customer_service","language":"zh-CN","principles":["先确认问题影响范围和紧急程度","基于知识库、SOP和工单上下文回复","涉及生产数据、权限、重启、部署、删除、回滚时必须人工确认","不暴露密钥、令牌、内部账号和敏感信息"]}`,
+		Model:       "",
+		Temperature: 0.3,
+		MaxTokens:   2048,
+		Enabled:     true,
+		CreatedBy:   createdBy,
+	}
+
+	if err := db.Where("name = ?", agent.Name).FirstOrCreate(&agent).Error; err != nil {
+		log.Warn("Failed to seed default customer service agent", "error", err)
+	}
+}
+
+func seedDefaultCustomerServiceSkill(db *gorm.DB, log *logger.Logger, createdBy uint) {
+	skill := model.Skill{
+		Name:        "客服基础技能",
+		Description: "用于客户咨询、工单回复、故障排查、配置核对、需求反馈和问题升级的基础客服技能。",
+		Category:    "客服",
+		Enabled:     true,
+		CreatedBy:   createdBy,
+	}
+
+	if err := db.Where("name = ?", skill.Name).FirstOrCreate(&skill).Error; err != nil {
+		log.Warn("Failed to seed default customer service skill", "error", err)
+	}
+}
+
+func seedDefaultCustomerServiceSOP(db *gorm.DB, log *logger.Logger, createdBy uint) {
+	var agent model.Agent
+	var agentID *uint
+	if err := db.Where("name = ?", "默认客服 Agent").First(&agent).Error; err == nil {
+		agentID = &agent.ID
+	}
+
+	type stepDef struct {
+		Name    string                 `json:"name"`
+		Type    string                 `json:"type"`
+		AgentID *uint                  `json:"agent_id,omitempty"`
+		Config  map[string]interface{} `json:"config,omitempty"`
+	}
+
+	steps, err := json.Marshal([]stepDef{
+		{
+			Name:    "识别问题并收集信息",
+			Type:    "react",
+			AgentID: agentID,
+			Config: map[string]interface{}{
+				"goal": "判断工单类型、紧急程度和影响范围，必要时向用户补充询问环境、时间、复现步骤、报错信息、账号或租户标识。",
+			},
+		},
+		{
+			Name:    "检索知识库并给出初步回复",
+			Type:    "react",
+			AgentID: agentID,
+			Config: map[string]interface{}{
+				"goal": "基于知识库和工单上下文检索相关资料，先给结论，再给可执行排查步骤或使用指导。",
+			},
+		},
+		{
+			Name: "人工确认高风险操作",
+			Type: "human",
+			Config: map[string]interface{}{
+				"goal": "涉及生产数据、权限、重启、部署、删除、回滚、批量更新或安全处置时，由人工客服确认后再继续。",
+			},
+		},
+	})
+	if err != nil {
+		log.Warn("Failed to marshal default customer service SOP steps", "error", err)
+		return
+	}
+
+	sop := model.SOP{
+		Name:          "默认客服处理 SOP",
+		Description:   "客户咨询、故障排查、配置核对、需求反馈和工单回复的默认处理流程。",
+		Version:       "1.0",
+		Steps:         string(steps),
+		TriggerType:   "ticket_created",
+		TriggerConfig: `{}`,
+		RiskLevel:     "medium",
+		Status:        1,
+		CreatedBy:     createdBy,
+	}
+
+	if err := db.Where("name = ?", sop.Name).FirstOrCreate(&sop).Error; err != nil {
+		log.Warn("Failed to seed default customer service SOP", "error", err)
+	}
 }

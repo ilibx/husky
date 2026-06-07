@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppStore } from '@/stores/app'
@@ -53,6 +53,33 @@ async function fetchMenus() {
   }
 }
 
+const activeMenu = computed(() => {
+  const menuID = route.query.menu_id
+  if (menuID) return String(menuID)
+  const menu = flattenMenus(menuItems.value).find(item => item.path === route.path)
+  return menu ? String(menu.id) : route.path
+})
+
+function flattenMenus(items: any[]): any[] {
+  return items.flatMap(item => [item, ...flattenMenus(item.children || [])])
+}
+
+function handleMenuSelect(index: string) {
+  const menu = flattenMenus(menuItems.value).find(item => String(item.id) === index)
+  if (!menu) return
+  if (menu.external) {
+    if (menu.iframe) {
+      router.push({ path: '/external-frame', query: { url: menu.path, menu_id: String(menu.id) } })
+    } else {
+      window.open(menu.path, '_blank', 'noopener,noreferrer')
+    }
+    return
+  }
+  if (menu.path) {
+    router.push(menu.path)
+  }
+}
+
 function goToNotifications() {
   router.push('/notifications')
 }
@@ -79,29 +106,29 @@ function handleLogout() {
         <span class="logo-icon">
           <el-icon :size="22"><Setting /></el-icon>
         </span>
-        <span v-show="!app.sidebarCollapsed" class="logo-text">工单管理</span>
+        <span v-show="!app.sidebarCollapsed" class="logo-text">智能工单系统</span>
       </div>
       <el-menu
-        :default-active="route.path"
+        :default-active="activeMenu"
         :collapse="app.sidebarCollapsed"
-        router
         :collapse-transition="false"
         background-color="transparent"
         text-color="#94a3b8"
         active-text-color="#ffffff"
+        @select="handleMenuSelect"
       >
         <template v-for="item in menuItems" :key="item.id || item.name">
-          <el-sub-menu v-if="item.children && item.children.length" :index="item.name">
+          <el-sub-menu v-if="item.children && item.children.length" :index="String(item.id)">
             <template #title>
               <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
               <span>{{ item.name }}</span>
             </template>
-            <el-menu-item v-for="child in item.children" :key="child.path" :index="child.path!">
+            <el-menu-item v-for="child in item.children" :key="child.id" :index="String(child.id)">
               <el-icon v-if="child.icon"><component :is="child.icon" /></el-icon>
               <template #title>{{ child.name }}</template>
             </el-menu-item>
           </el-sub-menu>
-          <el-menu-item v-else :index="item.path!">
+          <el-menu-item v-else :index="String(item.id)">
             <el-icon v-if="item.icon"><component :is="item.icon" /></el-icon>
             <template #title>{{ item.name }}</template>
           </el-menu-item>

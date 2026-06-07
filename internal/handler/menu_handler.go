@@ -95,3 +95,26 @@ func (h *MenuHandler) DeleteMenu(c *gin.Context) {
 
 	httputil.Success(c, gin.H{"message": "deleted"})
 }
+
+func (h *MenuHandler) UpdateRoleMenus(c *gin.Context) {
+	role := c.Param("role")
+	if role == "" || role == "admin" {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "invalid role")
+		return
+	}
+
+	var req struct {
+		MenuIDs []uint `json:"menu_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
+		return
+	}
+
+	if err := h.repo.UpdateRoleMenus(c.Request.Context(), role, req.MenuIDs); err != nil {
+		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, "failed to update role menus")
+		return
+	}
+
+	httputil.Success(c, gin.H{"message": "updated"})
+}

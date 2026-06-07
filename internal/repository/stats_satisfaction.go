@@ -131,7 +131,7 @@ func (r *TicketRepository) GetAgentPerformance(ctx context.Context) ([]AgentPerf
 		SELECT
 			u.id AS user_id,
 			u.username,
-			u.display_name,
+			u.username AS display_name,
 			COALESCE(resolved.resolved_count, 0) AS resolved_count,
 			COALESCE(resolved.avg_hrs, 0) AS avg_resolution_hrs,
 			COALESCE(sat.avg_score, 0) AS avg_satisfaction,

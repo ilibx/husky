@@ -37,7 +37,7 @@ async function handleLogin() {
         <div class="login-logo">
           <el-icon :size="28"><Setting /></el-icon>
         </div>
-        <h2 class="login-title">工单管理系统</h2>
+        <h2 class="login-title">智能工单系统</h2>
         <p class="login-subtitle">请登录您的账号</p>
       </div>
       <el-form :model="form" @submit.prevent="handleLogin">

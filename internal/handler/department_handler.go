@@ -37,13 +37,17 @@ func (h *DepartmentHandler) CreateDepartment(c *gin.Context) {
 
 func (h *DepartmentHandler) ListDepartments(c *gin.Context) {
 	keyword := c.Query("keyword")
-	list, err := h.deptService.List(c.Request.Context(), keyword)
+	offset, limit, ok := httputil.ParsePagination(c)
+	if !ok {
+		return
+	}
+	list, total, err := h.deptService.List(c.Request.Context(), offset, limit, keyword)
 	if err != nil {
 		httputil.Error(c, http.StatusInternalServerError, errors.ErrInternal, err.Error())
 		return
 	}
 
-	httputil.Success(c, gin.H{"data": list})
+	httputil.Success(c, gin.H{"data": list, "total": total})
 }
 
 func (h *DepartmentHandler) GetDepartment(c *gin.Context) {

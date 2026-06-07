@@ -29,14 +29,18 @@ func (r *DepartmentRepository) GetByID(ctx context.Context, id uint) (*model.Dep
 	return &dept, nil
 }
 
-func (r *DepartmentRepository) List(ctx context.Context, keyword string) ([]model.Department, error) {
+func (r *DepartmentRepository) List(ctx context.Context, offset, limit int, keyword string) ([]model.Department, int64, error) {
 	var list []model.Department
-	query := r.db.WithContext(ctx).Preload("Manager").Order("code ASC")
+	var total int64
+	query := r.db.WithContext(ctx).Model(&model.Department{}).Preload("Manager")
 	if keyword != "" {
 		query = query.Where("name ILIKE ? OR code ILIKE ?", "%"+keyword+"%", "%"+keyword+"%")
 	}
-	err := query.Find(&list).Error
-	return list, err
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order("code ASC").Offset(offset).Limit(limit).Find(&list).Error
+	return list, total, err
 }
 
 func (r *DepartmentRepository) Update(ctx context.Context, dept *model.Department) error {

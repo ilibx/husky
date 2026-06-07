@@ -15,9 +15,9 @@ type User struct {
 	Avatar      string     `gorm:"size:500" json:"avatar"`
 	Department  string     `gorm:"size:100" json:"department"`
 	Title       string     `gorm:"size:100" json:"title"`
-	Skills      string     `gorm:"type:text" json:"skills"`        // JSON array, e.g. ["network","hardware","account"]
-	MaxLoad     int        `gorm:"default:10" json:"max_load"`     // 最大并发处理工单数
-	Status      int        `gorm:"default:1" json:"status"`        // 1: 激活，0: 禁用
+	Skills      string     `gorm:"type:text" json:"skills"`    // JSON array, e.g. ["network","hardware","account"]
+	MaxLoad     int        `gorm:"default:10" json:"max_load"` // 最大并发处理工单数
+	Status      int        `gorm:"default:1" json:"status"`    // 1: 激活，0: 禁用
 	Role        string     `gorm:"size:50;default:'user'" json:"role"`
 	LastLoginAt *time.Time `json:"last_login_at,omitempty"`
 }
@@ -29,6 +29,16 @@ type UpdateUserRequest struct {
 	Department string `json:"department,omitempty"`
 	Title      string `json:"title,omitempty"`
 	Phone      string `json:"phone,omitempty"`
+	Role       string `json:"role,omitempty"`
+}
+
+// CreateUserRequest 创建用户请求
+type CreateUserRequest struct {
+	Username string `json:"username" binding:"required"`
+	Nickname string `json:"nickname,omitempty"`
+	Email    string `json:"email" binding:"required"`
+	Password string `json:"password" binding:"required"`
+	Role     string `json:"role"`
 }
 
 // ChangeRoleRequest 角色变更请求

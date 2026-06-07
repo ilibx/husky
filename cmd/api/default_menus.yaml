@@ -48,33 +48,9 @@ menus:
         path: /knowledge/config
         sort: 3
 
-  - name: 系统管理
-    icon: Setting
-    sort: 40
-    roles: admin
-    children:
-      - name: 部门管理
-        path: /departments
-        sort: 1
-      - name: 角色管理
-        path: /roles
-        sort: 2
-      - name: 用户管理
-        path: /users
-        sort: 3
-      - name: 菜单管理
-        path: /menus
-        sort: 4
-      - name: 分类管理
-        path: /categories
-        sort: 5
-      - name: 标签管理
-        path: /tags
-        sort: 6
-
   - name: 通知管理
     icon: Bell
-    sort: 45
+    sort: 40
     roles: admin
     children:
       - name: 通知列表
@@ -110,3 +86,25 @@ menus:
       - name: 模型配置
         path: /models/configs
         sort: 2
+
+  - name: 系统管理
+    icon: Setting
+    sort: 70
+    roles: admin
+    children:
+      - name: 部门管理
+        path: /departments
+        sort: 1
+      - name: 角色管理
+        path: /roles
+        sort: 2
+      - name: 用户管理
+        path: /users
+        sort: 3
+      - name: 菜单管理
+        path: /menus
+        sort: 4
+      - name: 分类管理
+        path: /categories
+        sort: 5
+

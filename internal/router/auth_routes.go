@@ -17,6 +17,7 @@ func setupUserRoutes(group *gin.RouterGroup, h *handler.UserHandler, ah *handler
 	group.PUT("/me", ah.UpdateProfile)
 	group.GET("", auth.RBACMiddleware("admin"), h.ListUsers)
 	group.GET("/:id", h.GetUser)
+	group.POST("", auth.RBACMiddleware("admin"), h.CreateUser)
 	group.PUT("/:id", h.UpdateUser)
 	group.DELETE("/:id", auth.RBACMiddleware("admin"), h.DeleteUser)
 	group.PUT("/:id/role", auth.RBACMiddleware("admin"), h.ChangeRole)

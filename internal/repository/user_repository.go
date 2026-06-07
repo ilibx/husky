@@ -55,6 +55,14 @@ func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*model.U
 	return &user, nil
 }
 
+func (r *UserRepository) RoleExists(ctx context.Context, role string) (bool, error) {
+	var count int64
+	if err := r.db.WithContext(ctx).Model(&model.Role{}).Where("name = ?", role).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
 // Update 更新用户
 func (r *UserRepository) Update(ctx context.Context, user *model.User) error {
 	return r.db.WithContext(ctx).Save(user).Error

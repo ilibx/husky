@@ -17,7 +17,7 @@ import (
 
 type Handler struct {
 	knowledgeService Service
-	storageBasePath string
+	storageBasePath  string
 }
 
 func NewHandler(knowledgeService Service, storageBasePath string) *Handler {
@@ -25,8 +25,8 @@ func NewHandler(knowledgeService Service, storageBasePath string) *Handler {
 		storageBasePath = "./data/knowledge"
 	}
 	return &Handler{
-		knowledgeService:  knowledgeService,
-		storageBasePath:   storageBasePath,
+		knowledgeService: knowledgeService,
+		storageBasePath:  storageBasePath,
 	}
 }
 
@@ -35,6 +35,12 @@ func (h *Handler) CreateKnowledge(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		httputil.Error(c, http.StatusBadRequest, errors.ErrInvalidParams, err.Error())
 		return
+	}
+
+	if userID, ok := c.Get("user_id"); ok {
+		if uid, ok := userID.(uint); ok {
+			req.CreatedByUserID = uid
+		}
 	}
 
 	kb, err := h.knowledgeService.CreateKnowledge(c.Request.Context(), &req)
@@ -197,6 +203,11 @@ func (h *Handler) UploadDoc(c *gin.Context) {
 		SourceType: sourceType,
 		SourceURL:  savePath,
 		Status:     "active",
+	}
+	if userID, ok := c.Get("user_id"); ok {
+		if uid, ok := userID.(uint); ok {
+			kb.CreatedByUserID = uid
+		}
 	}
 
 	created, err := h.knowledgeService.CreateKnowledge(c.Request.Context(), kb)

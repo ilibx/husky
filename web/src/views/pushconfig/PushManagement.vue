@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage, ElMessageBox, ElPopconfirm } from 'element-plus'
+import { Plus, Delete, EditPen, Search, Refresh } from '@element-plus/icons-vue'
 import request from '@/api/request'
 
 interface PushMethod {
@@ -16,8 +17,16 @@ const methods = ref<PushMethod[]>([])
 const loading = ref(false)
 const dialog = ref(false)
 const editing = ref(false)
+const keyword = ref('')
+let searchTimer: ReturnType<typeof setTimeout>
 const form = ref<PushMethod>({
   name: '', type: 'webhook', level: 'warning', template: '', enabled: true, params: {},
+})
+
+const filteredMethods = computed(() => {
+  if (!keyword.value) return methods.value
+  const kw = keyword.value.toLowerCase()
+  return methods.value.filter(m => m.name.toLowerCase().includes(kw))
 })
 
 const isWebhook = computed(() => form.value.type === 'webhook')
@@ -68,7 +77,6 @@ async function save() {
 
 async function remove(name: string) {
   try {
-    await ElMessageBox.confirm(`确认删除推送方式 "${name}"？`, '提示')
     const res: any = await request.get('/system-config', { params: { page: 1, page_size: 200 } })
     const list: any[] = res.data?.data || []
     const cfg = list.find((c: any) => c.key === `method:${name}`)
@@ -92,6 +100,11 @@ async function fetchLevels() {
   } catch { levelOptions.value = [] }
 }
 
+function onSearch() {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(fetchMethods, 300)
+}
+
 onMounted(() => {
   fetchMethods()
   fetchLevels()
@@ -99,45 +112,63 @@ onMounted(() => {
 </script>
 
 <template>
-  <div>
-    <div class="page-header">
-      <h2><el-icon><Bell /></el-icon> 推送管理</h2>
-    </div>
-
-    <el-card>
-      <div class="tab-toolbar">
-        <el-button type="primary" @click="openAdd">添加推送方式</el-button>
+  <div class="page">
+    <div class="list-view">
+      <div class="page-header">
+        <h2>推送管理</h2>
       </div>
 
-      <el-table :data="methods" v-loading="loading" stripe style="width:100%">
-        <el-table-column prop="name" label="推送方式名称" width="150" />
-        <el-table-column prop="type" label="方式" width="100">
-          <template #default="{ row }">
-            <el-tag>{{ typeOptions.find(t => t.value === row.type)?.label || row.type }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="通知等级" width="100">
-          <template #default="{ row }">
-            <el-tag v-if="row.level" :color="levelOptions.find(l => l.key === row.level)?.color || '#909399'" style="color:#fff" size="small">
-              {{ levelOptions.find(l => l.key === row.level)?.name || row.level }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="template" label="推送模板" min-width="240" show-overflow-tooltip />
-        <el-table-column prop="enabled" label="启用" width="80">
-          <template #default="{ row }">
-            <el-switch v-model="row.enabled" @change="toggle(row)" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button size="small" @click="openEdit(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="remove(row.name)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <el-card shadow="never" class="list-card">
+        <div class="table-toolbar">
+          <div class="toolbar-left">
+            <el-input v-model="keyword" placeholder="搜索推送方式..." clearable @input="onSearch" class="search-input">
+              <template #prefix><el-icon><Search /></el-icon></template>
+            </el-input>
+          </div>
+          <div class="toolbar-right">
+            <el-button :icon="Refresh" circle @click="fetchMethods" />
+            <el-button type="primary" :icon="Plus" @click="openAdd">添加推送方式</el-button>
+          </div>
+        </div>
 
-      <el-dialog v-model="dialog" :title="editing ? '编辑推送方式' : '添加推送方式'" width="600px">
+        <el-table :data="keyword ? filteredMethods : methods" v-loading="loading" class="beauty-table" style="width:100%" height="calc(100vh - 100px)">
+          <el-table-column prop="name" label="推送方式名称" min-width="150">
+            <template #default="{ row }"><span class="name-cell">{{ row.name }}</span></template>
+          </el-table-column>
+          <el-table-column prop="type" label="方式" width="100" align="center">
+            <template #default="{ row }">
+              <el-tag size="small" effect="plain">{{ typeOptions.find(t => t.value === row.type)?.label || row.type }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="通知等级" width="120" align="center">
+            <template #default="{ row }">
+              <el-tag v-if="row.level" :color="levelOptions.find(l => l.key === row.level)?.color || '#909399'" style="color:#fff" size="small" effect="dark">
+                {{ levelOptions.find(l => l.key === row.level)?.name || row.level }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="template" label="推送模板" min-width="280" show-overflow-tooltip />
+          <el-table-column prop="enabled" label="启用" width="80" align="center">
+            <template #default="{ row }">
+              <el-switch v-model="row.enabled" size="small" active-color="#67c23a" inactive-color="#c0c4cc" @change="toggle(row)" />
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="120" fixed="right" align="center">
+            <template #default="{ row }">
+              <div class="action-group">
+                <el-button size="small" text :icon="EditPen" @click="openEdit(row)" />
+                <el-popconfirm title="确认删除?" @confirm="remove(row.name)">
+                  <template #reference><el-button size="small" text type="danger" :icon="Delete" /></template>
+                </el-popconfirm>
+              </div>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </div>
+
+    <el-dialog v-model="dialog" :title="editing ? '编辑推送方式' : '添加推送方式'" width="600px">
         <el-form :model="form" label-width="100px">
           <el-form-item label="推送方式名称">
             <el-input v-model="form.name" placeholder="如 SLA 预警推送" :disabled="editing" />
@@ -156,7 +187,6 @@ onMounted(() => {
             <el-input v-model="form.template" type="textarea" :rows="3" placeholder="推送消息模板，支持 {ticket_id} {title} {status} 等变量" />
           </el-form-item>
 
-          <!-- Webhook 参数 -->
           <template v-if="isWebhook">
             <el-form-item label="Webhook URL">
               <el-input v-model="form.params.url" placeholder="https://example.com/webhook" />
@@ -166,7 +196,6 @@ onMounted(() => {
             </el-form-item>
           </template>
 
-          <!-- 邮件参数 -->
           <template v-else>
             <el-form-item label="SMTP 服务器">
               <el-input v-model="form.params.host" placeholder="smtp.example.com" />
@@ -197,24 +226,56 @@ onMounted(() => {
           <el-button type="primary" @click="save">保存</el-button>
         </template>
       </el-dialog>
-    </el-card>
   </div>
 </template>
 
 <style scoped>
+.page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.list-view {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  flex-shrink: 0;
 }
 .page-header h2 {
   margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #1d2129;
 }
-.tab-toolbar {
+.list-card {
+  flex: 1;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
+  flex-direction: column;
+  border-radius: 12px;
+  border: 1px solid #e5e6eb;
+  min-height: 0;
 }
+.list-card :deep(.el-card__body) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 16px 20px;
+}
+.table-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+.toolbar-left { flex: 1; }
+.toolbar-right { display: flex; align-items: center; gap: 8px; }
+.search-input { width: 320px; }
+.beauty-table { --el-table-border-color: #f0f0f0; flex: 1; min-height: 350px; }
+.beauty-table :deep(.el-table__header th) { background: #f7f8fa; color: #4e5969; font-weight: 500; }
+.name-cell { color: #1d2129; font-weight: 500; }
+.action-group { display: flex; align-items: center; justify-content: center; gap: 4px; white-space: nowrap; }
+.action-group .el-button { margin-left: 0; }
 </style>
