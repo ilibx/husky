@@ -28,13 +28,21 @@ func (r *MCPRepository) GetByID(ctx context.Context, id uint) (*model.MCP, error
 	return &m, nil
 }
 
-func (r *MCPRepository) List(ctx context.Context, offset, limit int) ([]model.MCP, int64, error) {
+func (r *MCPRepository) List(ctx context.Context, offset, limit int, toolType, keyword string) ([]model.MCP, int64, error) {
 	var list []model.MCP
 	var total int64
-	if err := r.db.WithContext(ctx).Model(&model.MCP{}).Count(&total).Error; err != nil {
+	query := r.db.WithContext(ctx).Model(&model.MCP{})
+	if toolType != "" {
+		query = query.Where("type = ?", toolType)
+	}
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("name ILIKE ? OR description ILIKE ?", like, like)
+	}
+	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
-	err := r.db.WithContext(ctx).Order("created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
+	err := query.Order("type ASC, created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
 	return list, total, err
 }
 

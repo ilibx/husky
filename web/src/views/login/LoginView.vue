@@ -55,7 +55,7 @@ async function handleLogin() {
           />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" size="large" style="width: 100%; height: 44px; border-radius: 10px;" :loading="loading" @click="handleLogin">
+          <el-button type="primary" native-type="submit" size="large" style="width: 100%; height: 44px; border-radius: 10px;" :loading="loading" @click="handleLogin">
             登 录
           </el-button>
         </el-form-item>

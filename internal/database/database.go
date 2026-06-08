@@ -102,6 +102,45 @@ func AutoMigrate(db *gorm.DB) error {
 	}
 
 	log.Println("Database migration completed successfully")
+
+	if err := SeedBuiltinTools(db); err != nil {
+		return fmt.Errorf("failed to seed built-in tools: %w", err)
+	}
+
+	return nil
+}
+
+// SeedBuiltinTools 初始化系统内置工具
+func SeedBuiltinTools(db *gorm.DB) error {
+	builtins := []model.MCP{
+		{
+			Name:        "网页搜索",
+			Type:        "builtin",
+			Key:         "web_search",
+			Description: "通过 SearXNG 搜索引擎检索互联网信息",
+			Enabled:     true,
+			CreatedBy:   1,
+		},
+		{
+			Name:        "Miniflux",
+			Type:        "builtin",
+			Key:         "miniflux",
+			Description: "Miniflux RSS 阅读器集成，订阅和获取文章更新",
+			Enabled:     true,
+			CreatedBy:   1,
+		},
+	}
+
+	for _, t := range builtins {
+		var existing model.MCP
+		result := db.Where("key = ?", t.Key).First(&existing)
+		if result.Error != nil {
+			if err := db.Create(&t).Error; err != nil {
+				return fmt.Errorf("failed to create builtin tool %s: %w", t.Key, err)
+			}
+			log.Printf("Builtin tool created: %s (%s)", t.Name, t.Key)
+		}
+	}
 	return nil
 }
 

@@ -8,22 +8,25 @@ import (
 	"github.com/husky/husky/internal/model"
 	"github.com/husky/husky/internal/repository"
 	"github.com/husky/husky/pkg/llm"
+	"github.com/husky/husky/pkg/websearch"
 	"gorm.io/datatypes"
 )
 
 type service struct {
-	vectorRepo    repository.VectorStoreRepository
-	embedding     *llm.EmbeddingService
-	categoryRepo  *repository.CategoryRepository
-	chatSvc       *llm.ChatService
+	vectorRepo   repository.VectorStoreRepository
+	embedding    *llm.EmbeddingService
+	categoryRepo *repository.CategoryRepository
+	chatSvc      *llm.ChatService
+	webSearcher  websearch.Searcher
 }
 
-func NewService(vectorRepo repository.VectorStoreRepository, embedding *llm.EmbeddingService, categoryRepo *repository.CategoryRepository, chatSvc *llm.ChatService) Service {
+func NewService(vectorRepo repository.VectorStoreRepository, embedding *llm.EmbeddingService, categoryRepo *repository.CategoryRepository, chatSvc *llm.ChatService, webSearcher websearch.Searcher) Service {
 	return &service{
 		vectorRepo:   vectorRepo,
 		embedding:    embedding,
 		categoryRepo: categoryRepo,
 		chatSvc:      chatSvc,
+		webSearcher:  webSearcher,
 	}
 }
 

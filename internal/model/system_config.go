@@ -46,6 +46,11 @@ const (
 	SysCfgVectorSources  = "sources"
 )
 
+// SysCfgCategoryWebSearch web search config category
+const SysCfgCategoryWebSearch = "web_search"
+const SysCfgWebSearchEndpoint = "endpoint"
+const SysCfgWebSearchAPIKey = "api_key"
+
 type KnowledgeStoreConfig struct {
 	Name        string `json:"name"`
 	Kind        string `json:"kind"`

@@ -209,6 +209,17 @@ func (p *GeminiProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatRespo
 	}, nil
 }
 
+func (p *GeminiProvider) ChatStream(ctx context.Context, req *ChatRequest, callback ChatStreamCallback) (*ChatResponse, error) {
+	resp, err := p.Chat(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	if err := callback(resp.Content); err != nil {
+		return nil, err
+	}
+	return resp, nil
+}
+
 func (p *GeminiProvider) Name() string {
 	return ProviderGemini
 }

@@ -21,7 +21,9 @@ func (h *MCPHandler) List(c *gin.Context) {
     page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
     size, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
     offset := (page - 1) * size
-    list, total, err := h.repo.List(c, offset, size)
+    toolType := c.Query("type")
+    keyword := c.Query("keyword")
+    list, total, err := h.repo.List(c, offset, size, toolType, keyword)
     if err != nil {
         c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
         return

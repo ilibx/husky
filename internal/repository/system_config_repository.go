@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/husky/husky/internal/model"
+	"github.com/husky/husky/pkg/websearch"
 	"gorm.io/gorm"
 )
 
@@ -147,6 +148,23 @@ func (r *SystemConfigRepository) ListKnowledgeStoreConfigs(ctx context.Context) 
 		stores = append(stores, store)
 	}
 	return stores, nil
+}
+
+func (r *SystemConfigRepository) GetWebSearchConfig(ctx context.Context) (*websearch.Config, error) {
+	configs, err := r.ListByCategory(ctx, model.SysCfgCategoryWebSearch)
+	if err != nil {
+		return nil, fmt.Errorf("get web search config: %w", err)
+	}
+	cfg := &websearch.Config{}
+	for _, c := range configs {
+		switch c.Key {
+		case model.SysCfgWebSearchEndpoint:
+			cfg.Endpoint = c.Value
+		case model.SysCfgWebSearchAPIKey:
+			cfg.APIKey = c.Value
+		}
+	}
+	return cfg, nil
 }
 
 func (r *SystemConfigRepository) GetVectorConfig(ctx context.Context) (*model.VectorDBConfig, error) {

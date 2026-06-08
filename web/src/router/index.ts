@@ -61,7 +61,7 @@ const routes: RouteRecordRaw[] = [
         path: 'mcps',
         name: 'MCPs',
         component: () => import('@/views/mcps/MCPManagement.vue'),
-        meta: { title: 'MCP 服务', icon: 'Cpu' },
+        meta: { title: '工具管理', icon: 'Cpu' },
       },
       // ---- 资料管理 ----
       {

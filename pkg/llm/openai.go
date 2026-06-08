@@ -1,12 +1,14 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -22,6 +24,10 @@ type OpenAIProvider struct {
 func NewOpenAIProvider(apiKey, baseURL, model string) *OpenAIProvider {
 	if baseURL == "" {
 		baseURL = "https://api.openai.com/v1"
+	}
+	baseURL = strings.TrimRight(baseURL, "/")
+	if !strings.HasSuffix(baseURL, "/v1") {
+		baseURL += "/v1"
 	}
 	if model == "" {
 		model = "text-embedding-ada-002"
@@ -113,7 +119,7 @@ func (p *OpenAIProvider) BatchEmbed(ctx context.Context, texts []string) ([][]fl
 	return embeddings, nil
 }
 
-func (p *OpenAIProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+func buildMessages(req *ChatRequest) []map[string]interface{} {
 	messages := make([]map[string]interface{}, len(req.Messages))
 	for i, msg := range req.Messages {
 		m := map[string]interface{}{
@@ -137,7 +143,11 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatRespo
 		}
 		messages[i] = m
 	}
+	return messages
+}
 
+func (p *OpenAIProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+	messages := buildMessages(req)
 	body := map[string]interface{}{
 		"model":    req.Model,
 		"messages": messages,
@@ -173,7 +183,7 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatRespo
 		return nil, fmt.Errorf("failed to read chat response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("chat API returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, fmt.Errorf("chat API returned %d (URL: %s): %s", resp.StatusCode, p.baseURL+"/chat/completions", string(respBody))
 	}
 
 	var result struct {
@@ -184,7 +194,7 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatRespo
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(respBody, &result); err != nil {
-		return nil, fmt.Errorf("failed to parse chat response: %w", err)
+		return nil, fmt.Errorf("failed to parse chat response (URL: %s, body: %s): %w", p.baseURL+"/chat/completions", string(respBody), err)
 	}
 	if len(result.Choices) == 0 {
 		return nil, fmt.Errorf("empty chat response")
@@ -192,6 +202,87 @@ func (p *OpenAIProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatRespo
 
 	return &ChatResponse{
 		Content: result.Choices[0].Message.Content,
+		Model:   req.Model,
+	}, nil
+}
+
+func (p *OpenAIProvider) ChatStream(ctx context.Context, req *ChatRequest, callback ChatStreamCallback) (*ChatResponse, error) {
+	messages := buildMessages(req)
+	body := map[string]interface{}{
+		"model":    req.Model,
+		"messages": messages,
+		"stream":   true,
+	}
+	if req.Temperature > 0 {
+		body["temperature"] = req.Temperature
+	}
+	if req.MaxTokens > 0 {
+		body["max_tokens"] = req.MaxTokens
+	}
+
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal stream request: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.baseURL+"/chat/completions", bytes.NewReader(payload))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stream request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+p.apiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Accept", "text/event-stream")
+
+	resp, err := p.client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("stream request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("stream API returned %d (URL: %s): %s", resp.StatusCode, p.baseURL+"/chat/completions", string(respBody))
+	}
+
+	fullContent := ""
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			break
+		}
+		var chunk struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
+			continue
+		}
+		if len(chunk.Choices) == 0 {
+			continue
+		}
+		delta := chunk.Choices[0].Delta.Content
+		if delta == "" {
+			continue
+		}
+		fullContent += delta
+		if err := callback(delta); err != nil {
+			return nil, err
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("stream read error: %w", err)
+	}
+
+	return &ChatResponse{
+		Content: fullContent,
 		Model:   req.Model,
 	}, nil
 }

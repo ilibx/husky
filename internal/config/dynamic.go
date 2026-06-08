@@ -2,7 +2,9 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -35,6 +37,14 @@ func (d *DynamicConfig) InitLLM(ctx context.Context) error {
 	dbCfg, err := d.cfgRepo.GetLLMConfig(ctx)
 	if err != nil {
 		return fmt.Errorf("get LLM config from DB: %w", err)
+	}
+
+	// Try fallback to the first enabled platform preset if no individual LLM config is set
+	if dbCfg.APIKey == "" {
+		presetCfg, presetErr := d.loadFirstPreset(ctx)
+		if presetErr == nil && presetCfg != nil {
+			dbCfg = presetCfg
+		}
 	}
 
 	if dbCfg.APIKey == "" {
@@ -139,4 +149,42 @@ func (d *DynamicConfig) ReloadVector(ctx context.Context) error {
 	gormDB := d.gormDB
 	d.mu.RUnlock()
 	return d.InitVector(ctx, gormDB)
+}
+
+// loadFirstPreset 尝试从首个启用的平台 preset 中读取 LLM 配置作为 fallback
+func (d *DynamicConfig) loadFirstPreset(ctx context.Context) (*model.LLMConfig, error) {
+	configs, err := d.cfgRepo.ListByCategory(ctx, model.SysCfgCategoryLLM)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range configs {
+		if !strings.HasPrefix(c.Key, "preset:") || !c.Enabled {
+			continue
+		}
+		var preset struct {
+			Name    string   `json:"name"`
+			Type    string   `json:"type"`
+			APIKey  string   `json:"api_key"`
+			BaseURL string   `json:"base_url"`
+			Enabled bool     `json:"enabled"`
+			Models  []string `json:"models"`
+		}
+		if err := json.Unmarshal([]byte(c.Value), &preset); err != nil {
+			continue
+		}
+		if preset.APIKey == "" {
+			continue
+		}
+		cfg := model.DefaultLLMConfig()
+		cfg.Provider = preset.Type
+		cfg.APIKey = preset.APIKey
+		if preset.BaseURL != "" {
+			cfg.BaseURL = preset.BaseURL
+		}
+		if len(preset.Models) > 0 {
+			cfg.Model = preset.Models[0]
+		}
+		return &cfg, nil
+	}
+	return nil, fmt.Errorf("no enabled platform preset with api_key found")
 }

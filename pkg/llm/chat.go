@@ -58,6 +58,19 @@ func (s *ChatService) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse
 	return s.provider.Chat(ctx, req)
 }
 
+// ChatStream 流式对话
+func (s *ChatService) ChatStream(ctx context.Context, req *ChatRequest, callback ChatStreamCallback) (*ChatResponse, error) {
+	if s.limiter != nil {
+		if err := s.limiter.Wait(ctx); err != nil {
+			return nil, err
+		}
+	}
+	if req.Model == "" && s.defaultModel != "" {
+		req.Model = s.defaultModel
+	}
+	return s.provider.ChatStream(ctx, req, callback)
+}
+
 // TokenBucket 简单的令牌桶限速器
 type TokenBucket struct {
 	mu       sync.Mutex

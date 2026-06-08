@@ -23,6 +23,7 @@ import (
 	"github.com/husky/husky/internal/ticket"
 	"github.com/husky/husky/pkg/llm"
 	"github.com/husky/husky/pkg/logger"
+	"github.com/husky/husky/pkg/websearch"
 )
 
 func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log *logger.Logger) (http.Handler, func()) {
@@ -61,7 +62,19 @@ func SetupRouter(cfg *config.Config, dbConn *repository.DatabaseConnection, log 
 		embedService = dynamicCfg.GetEmbeddingService()
 	}
 
-	knowledgeSvc := knowledge.NewService(kbRepo, embedService, repository.NewCategoryRepository(dbConn.DB), chatSvc)
+	var webSearcher websearch.Searcher
+	wsCfg, wsErr := sysCfgRepo.GetWebSearchConfig(context.Background())
+	if wsErr == nil && wsCfg.Endpoint != "" {
+		ws, err := websearch.NewSearcher(*wsCfg)
+		if err == nil {
+			webSearcher = ws
+			log.Info("Web search initialized", "endpoint", wsCfg.Endpoint)
+		} else {
+			log.Warn("Web search init failed", "error", err)
+		}
+	}
+
+	knowledgeSvc := knowledge.NewService(kbRepo, embedService, repository.NewCategoryRepository(dbConn.DB), chatSvc, webSearcher)
 	statsService := service.NewStatsService(ticketRepo)
 	userService := service.NewUserService(userRepo)
 	categoryService := service.NewCategoryService(

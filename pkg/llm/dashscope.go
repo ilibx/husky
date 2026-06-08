@@ -116,6 +116,14 @@ func (p *DashScopeProvider) BatchEmbed(ctx context.Context, texts []string) ([][
 	return embeddings, nil
 }
 
+func (p *DashScopeProvider) Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error) {
+	return nil, fmt.Errorf("DashScope does not support chat")
+}
+
+func (p *DashScopeProvider) ChatStream(ctx context.Context, req *ChatRequest, callback ChatStreamCallback) (*ChatResponse, error) {
+	return nil, fmt.Errorf("DashScope does not support chat")
+}
+
 func (p *DashScopeProvider) Name() string {
 	return ProviderDashScope
 }

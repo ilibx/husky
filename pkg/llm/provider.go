@@ -12,10 +12,15 @@ type EmbeddingProvider interface {
 	Name() string
 }
 
+// ChatStreamCallback 流式回调，返回每个文本块
+type ChatStreamCallback func(chunk string) error
+
 // ChatProvider LLM 对话接口
 type ChatProvider interface {
 	// Chat 发送对话请求
 	Chat(ctx context.Context, req *ChatRequest) (*ChatResponse, error)
+	// ChatStream 流式对话，通过 callback 逐块返回内容
+	ChatStream(ctx context.Context, req *ChatRequest, callback ChatStreamCallback) (*ChatResponse, error)
 }
 
 // ChatRequest 对话请求

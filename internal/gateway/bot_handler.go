@@ -10,7 +10,7 @@ func (g *Gateway) tryBotAnswer(ctx context.Context, msg *IncomingMessage) bool {
 	if g.bot == nil || msg.ChatID == "" {
 		return false
 	}
-	answer, err := g.bot.Ask(ctx, msg.Content, "", false, nil)
+	answer, err := g.bot.Ask(ctx, msg.Content, "", false, nil, "")
 	if err != nil {
 		g.log.Warn("Gateway: bot Ask failed, creating ticket", "error", err)
 		return false

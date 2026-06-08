@@ -1,6 +1,18 @@
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, nextTick, computed, watch } from 'vue'
+import MarkdownIt from 'markdown-it'
 import request from '@/api/request'
+
+const md = new MarkdownIt({ html: true, breaks: true, linkify: true })
+
+function renderMarkdown(text: string): string {
+  if (!text) return ''
+  try {
+    return md.render(text)
+  } catch {
+    return text
+  }
+}
 
 interface Message {
   role: 'user' | 'assistant'
@@ -11,12 +23,13 @@ interface Message {
   loading?: boolean
 }
 
-interface ModelOption {
+interface PlatformPreset {
   name: string
-  provider: string
+  type: string
+  api_key: string
+  base_url: string
   enabled: boolean
-  max_tokens: number
-  temperature: number
+  models: string[]
 }
 
 const messages = ref<Message[]>([])
@@ -25,10 +38,66 @@ const sending = ref(false)
 const chatBody = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const pendingImages = ref<string[]>([])
-const selectedModel = ref('')
 const deepThinking = ref(false)
-const models = ref<ModelOption[]>([])
-const modelLoading = ref(false)
+const platforms = ref<PlatformPreset[]>([])
+const platformsLoading = ref(false)
+const selectedPlatform = ref('')
+const selectedModel = ref('')
+const selectedTool = ref('search')
+
+interface ToolOption {
+  label: string
+  value: string
+  key?: string
+}
+const toolOptions = ref<ToolOption[]>([])
+
+const toolOptionsDisplay = computed(() => {
+  const kb: ToolOption = { label: '知识库', value: 'search' }
+  const tools = toolOptions.value.filter(t => t.value !== 'search')
+  return [kb, ...tools]
+})
+
+const modelsForPlatform = computed(() => {
+  const p = platforms.value.find(x => x.name === selectedPlatform.value)
+  return p?.models || []
+})
+
+function selectFirstModel() {
+  const models = modelsForPlatform.value
+  if (models.length > 0) {
+    selectedModel.value = models[0]
+  }
+}
+
+const canSend = computed(() => (inputText.value.trim() !== '' || pendingImages.value.length > 0) && selectedModel.value !== '')
+
+watch(selectedPlatform, () => {
+  selectedModel.value = ''
+  selectFirstModel()
+})
+
+async function fetchPlatforms() {
+  platformsLoading.value = true
+  try {
+    const res: any = await request.get('/system-config', { params: { page: 1, page_size: 200 } })
+    const list: any[] = res.data?.data || []
+    platforms.value = list
+      .filter(c => c.category === 'llm' && c.key.startsWith('preset:'))
+      .map(c => {
+        try { return JSON.parse(c.value) } catch { return null }
+      })
+      .filter(Boolean) as PlatformPreset[]
+    if (platforms.value.length > 0 && !selectedPlatform.value) {
+      selectedPlatform.value = platforms.value[0].name
+      selectFirstModel()
+    }
+  } catch {
+    platforms.value = []
+  } finally {
+    platformsLoading.value = false
+  }
+}
 
 function scrollToBottom() {
   nextTick(() => {
@@ -36,31 +105,6 @@ function scrollToBottom() {
       chatBody.value.scrollTop = chatBody.value.scrollHeight
     }
   })
-}
-
-async function fetchModels() {
-  modelLoading.value = true
-  try {
-    const res: any = await request.get('/system-config', { params: { page: 1, page_size: 200 } })
-    const list: any[] = res.data?.data || []
-    const result: ModelOption[] = []
-    for (const item of list) {
-      if (item.key && item.key.startsWith('model:')) {
-        try {
-          const val = JSON.parse(item.value)
-          result.push({ name: item.key.slice(6), ...val })
-        } catch { /* skip */ }
-      }
-    }
-    models.value = result
-    if (result.length > 0 && !selectedModel.value) {
-      selectedModel.value = result[0].name
-    }
-  } catch {
-    models.value = []
-  } finally {
-    modelLoading.value = false
-  }
 }
 
 function pickImage() {
@@ -110,13 +154,74 @@ async function sendMessage() {
     if (deepThinking.value) payload.deep_thinking = true
     if (userImages.length > 0) payload.images = userImages
 
-    const res: any = await request.post('/knowledge/ask', payload)
-    const data = res.data
-    messages.value[assistantIdx - 1].content = data?.answer || data?.content || '未获取到回答'
-    messages.value[assistantIdx - 1].sources = data?.sources
-    messages.value[assistantIdx - 1].model = data?.model
-  } catch {
-    messages.value[assistantIdx - 1].content = '查询失败，请稍后重试'
+    const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+    const token = localStorage.getItem('token')
+    const resp = await fetch(`${baseURL}/knowledge/ask/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+      body: JSON.stringify(payload),
+    })
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+
+    const reader = resp.body?.getReader()
+    if (!reader) throw new Error('stream not supported')
+
+    const decoder = new TextDecoder()
+    let buf = ''
+    let currentEvent = ''
+    let dataLines: string[] = []
+    let sources: any[] = []
+
+    function flushEvent() {
+      if (dataLines.length === 0) return
+      const data = dataLines.join('\n')
+      dataLines = []
+      if (currentEvent === 'error') {
+        messages.value[assistantIdx - 1].content = data
+      } else if (currentEvent === 'sources') {
+        try { sources = JSON.parse(data) } catch {}
+      } else if (currentEvent === 'done') {
+        // stream complete
+      } else {
+        messages.value[assistantIdx - 1].content += data
+        scrollToBottom()
+      }
+    }
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buf += decoder.decode(value, { stream: true })
+
+      while (true) {
+        const sep = buf.indexOf('\n')
+        if (sep === -1) break
+        const line = buf.slice(0, sep)
+        buf = buf.slice(sep + 1)
+
+        if (line.startsWith('event: ')) {
+          flushEvent()
+          currentEvent = line.slice(7).trim()
+        } else if (line.startsWith('data: ')) {
+          dataLines.push(line.slice(6))
+        } else if (line === '') {
+          flushEvent()
+        } else if (dataLines.length > 0) {
+          dataLines[dataLines.length - 1] += '\n' + line
+        }
+      }
+    }
+    flushEvent()
+    if (sources.length) {
+      messages.value[assistantIdx - 1].sources = sources
+    }
+  } catch (e: any) {
+    if (!messages.value[assistantIdx - 1].content) {
+      messages.value[assistantIdx - 1].content = e?.message || '查询失败，请稍后重试'
+    }
   } finally {
     messages.value[assistantIdx - 1].loading = false
     sending.value = false
@@ -133,7 +238,7 @@ function handleKeydown(e: Event | KeyboardEvent) {
 }
 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
-const selectedTool = ref('search')
+const copiedIdx = ref(-1)
 
 function autoResize() {
   const el = textareaRef.value
@@ -142,17 +247,50 @@ function autoResize() {
   el.style.height = el.scrollHeight + 'px'
 }
 
-const canSend = computed(() => inputText.value.trim() !== '' || pendingImages.value.length > 0)
+async function copyContent(text: string, idx: number) {
+  try {
+    await navigator.clipboard.writeText(text)
+    copiedIdx.value = idx
+    setTimeout(() => { if (copiedIdx.value === idx) copiedIdx.value = -1 }, 2000)
+  } catch {
+    // fallback
+    const ta = document.createElement('textarea')
+    ta.value = text
+    document.body.appendChild(ta)
+    ta.select()
+    document.execCommand('copy')
+    document.body.removeChild(ta)
+    copiedIdx.value = idx
+    setTimeout(() => { if (copiedIdx.value === idx) copiedIdx.value = -1 }, 2000)
+  }
+}
 
-onMounted(fetchModels)
+async function fetchTools() {
+  try {
+    const res: any = await request.get('/mcps', { params: { page: 1, page_size: 200 } })
+    const items: any[] = res?.list || res?.data?.list || res?.data?.data || res?.data || []
+    toolOptions.value = items
+      .filter((t: any) => t.enabled !== false)
+      .map((t: any) => ({ label: t.name, value: t.key || t.name, key: t.key }))
+  } catch {
+    // fallback to defaults
+    toolOptions.value = []
+  }
+}
+
+onMounted(() => {
+  fetchPlatforms()
+  fetchTools()
+})
 </script>
 
 <template>
   <div class="chat-page">
+
     <div v-if="messages.length === 0" class="chat-empty">
       <div class="empty-icon">✨</div>
       <h2>有什么可以帮助你的？</h2>
-      <p>基于文档库和知识库中的知识，向我提问</p>
+      <p>基于知识库和资料文档，向我提问</p>
     </div>
 
     <div v-else ref="chatBody" class="chat-body">
@@ -163,8 +301,23 @@ onMounted(fetchModels)
             <div v-if="msg.images?.length" class="msg-imgs">
               <img v-for="(img, ii) in msg.images" :key="ii" :src="img" />
             </div>
-            <div v-if="msg.loading" class="typing"><span/><span/><span/></div>
-            <div v-else class="msg-text">{{ msg.content }}</div>
+            <div class="msg-text" v-html="renderMarkdown(msg.content)"></div>
+            <div v-if="msg.loading" class="msg-status generating">
+              <span class="status-dot" /><span class="status-dot" /><span class="status-dot" />
+              <span class="status-text">正在生成回答</span>
+            </div>
+            <div v-else-if="msg.role === 'assistant' && msg.content" class="msg-status done">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:#2468f2;"><polyline points="20 6 9 17 4 12"/></svg>
+              <span class="status-text">回答完成</span>
+              <button class="copy-btn" title="复制内容" @click="copyContent(msg.content, idx)">
+                <template v-if="copiedIdx === idx">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </template>
+                <template v-else>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </template>
+              </button>
+            </div>
           </div>
           <div v-if="msg.sources?.length" class="msg-sources">
             <div class="sources-title">参考来源 ({{ msg.sources.length }})</div>
@@ -211,25 +364,34 @@ onMounted(fetchModels)
             <el-select
               v-model="selectedTool"
               size="small"
-              style="width:100px"
+              style="width:120px"
             >
-              <el-option label="搜索知识库" value="search" />
-              <el-option label="联网搜索" value="web" />
+              <el-option v-for="opt in toolOptionsDisplay" :key="opt.value" :label="opt.label" :value="opt.value" />
             </el-select>
           </div>
           <div class="tools-right">
             <el-select
-              v-model="selectedModel"
-              placeholder="选择模型"
+              v-model="selectedPlatform"
+              placeholder="平台"
               size="small"
-              :loading="modelLoading"
-              style="width:140px"
+              :loading="platformsLoading"
+              style="width:120px"
               clearable
             >
-              <el-option v-for="m in models" :key="m.name" :label="m.name" :value="m.name">
-                <span>{{ m.name }}</span>
-                <el-tag v-if="m.provider" size="small" type="info" style="margin-left:6px">{{ m.provider }}</el-tag>
+              <el-option v-for="p in platforms" :key="p.name" :label="p.name" :value="p.name">
+                <span>{{ p.name }}</span>
+                <el-tag size="small" type="info" style="margin-left:6px">{{ p.type }}</el-tag>
               </el-option>
+            </el-select>
+            <el-select
+              v-model="selectedModel"
+              placeholder="模型"
+              size="small"
+              style="width:150px"
+              :disabled="!selectedPlatform"
+              clearable
+            >
+              <el-option v-for="m in modelsForPlatform" :key="m" :label="m" :value="m" />
             </el-select>
             <button class="tool-chip send-btn" :class="{ active: canSend }" :disabled="!canSend || sending" @click="sendMessage">
               <template v-if="!sending">
@@ -254,7 +416,6 @@ onMounted(fetchModels)
   overflow: hidden;
 }
 
-/* ---- Empty state ---- */
 .chat-empty {
   flex: 1;
   display: flex;
@@ -280,7 +441,6 @@ onMounted(fetchModels)
   color: #86909c;
 }
 
-/* ---- Chat body ---- */
 .chat-body {
   flex: 1;
   overflow-y: auto;
@@ -324,7 +484,6 @@ onMounted(fetchModels)
   border-radius: 14px;
   line-height: 1.7;
   font-size: 14px;
-  white-space: pre-wrap;
   word-break: break-word;
 }
 .msg-row.user .msg-bubble {
@@ -350,26 +509,146 @@ onMounted(fetchModels)
   object-fit: cover;
 }
 .msg-text {
+  line-height: 1.7;
+  word-wrap: break-word;
+}
+.msg-streaming {
   white-space: pre-wrap;
 }
-.typing {
+.cursor {
+  animation: cursorBlink 0.8s step-end infinite;
+  color: #2468f2;
+  font-size: 14px;
+  margin-left: 2px;
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.msg-text :deep(p) { margin: 0 0 8px; }
+.msg-text :deep(p:last-child) { margin-bottom: 0; }
+.msg-text :deep(code) {
+  background: #f0f0f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'SF Mono', 'Cascadia Code', monospace;
+}
+.msg-text :deep(pre) {
+  background: #1e1e1e;
+  color: #d4d4d4;
+  padding: 12px 16px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.msg-text :deep(pre code) {
+  background: none;
+  padding: 0;
+  color: inherit;
+}
+.msg-text :deep(ul), .msg-text :deep(ol) {
+  padding-left: 20px;
+  margin: 4px 0;
+}
+.msg-text :deep(li) { margin: 2px 0; }
+.msg-text :deep(h1), .msg-text :deep(h2), .msg-text :deep(h3),
+.msg-text :deep(h4), .msg-text :deep(h5), .msg-text :deep(h6) {
+  margin: 12px 0 6px;
+  font-weight: 600;
+  color: #1d2129;
+}
+.msg-text :deep(h1) { font-size: 18px; }
+.msg-text :deep(h2) { font-size: 16px; }
+.msg-text :deep(h3) { font-size: 15px; }
+.msg-text :deep(blockquote) {
+  border-left: 3px solid #2468f2;
+  margin: 8px 0;
+  padding: 4px 12px;
+  color: #666;
+  background: #f7f8fa;
+  border-radius: 0 6px 6px 0;
+}
+.msg-text :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.msg-text :deep(th), .msg-text :deep(td) {
+  border: 1px solid #e5e6eb;
+  padding: 6px 10px;
+  text-align: left;
+}
+.msg-text :deep(th) {
+  background: #f7f8fa;
+  font-weight: 600;
+}
+.msg-text :deep(a) { color: #2468f2; text-decoration: none; }
+.msg-text :deep(a:hover) { text-decoration: underline; }
+.msg-text :deep(hr) {
+  border: none;
+  border-top: 1px solid #e5e6eb;
+  margin: 12px 0;
+}
+.msg-text :deep(img) {
+  max-width: 100%;
+  border-radius: 6px;
+  margin: 8px 0;
+}
+.msg-status {
   display: flex;
-  gap: 5px;
-  padding: 6px 0;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e6eb;
+  font-size: 12px;
 }
-.typing span {
-  width: 7px;
-  height: 7px;
+.msg-status .status-text {
+  color: #86909c;
+}
+.msg-status.generating .status-text {
+  color: #2468f2;
+}
+.msg-status.done .status-text {
+  color: #86909c;
+}
+.copy-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #86909c;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.copy-btn:hover {
+  background: #f2f3f5;
+  border-color: #e5e6eb;
+  color: #4e5969;
+}
+.status-dot {
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: #c9cdd4;
-  animation: blink 1.4s infinite both;
+  background: #2468f2;
+  animation: statusPulse 1.2s ease-in-out infinite;
 }
-.typing span:nth-child(2) { animation-delay: 0.2s; }
-.typing span:nth-child(3) { animation-delay: 0.4s; }
-@keyframes blink {
-  0%, 80%, 100% { opacity: 0.3; }
-  40% { opacity: 1; }
+.status-dot:nth-child(2) { animation-delay: 0.2s; }
+.status-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes statusPulse {
+  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+  40% { opacity: 1; transform: scale(1.1); }
 }
+
 .msg-sources {
   font-size: 13px;
 }
@@ -398,7 +677,6 @@ onMounted(fetchModels)
   white-space: pre-wrap;
 }
 
-/* ---- Footer ---- */
 .chat-footer {
   padding: 0 20px 20px;
   flex-shrink: 0;
@@ -534,6 +812,7 @@ onMounted(fetchModels)
   font-size: 16px;
   line-height: 1;
 }
+
 .tools-left :deep(.el-select) {
   --el-select-border-color-hover: transparent;
   --el-select-input-focus-border-color: transparent;

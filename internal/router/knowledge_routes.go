@@ -19,6 +19,7 @@ func setupKnowledgeRoutes(group *gin.RouterGroup, h *knowledge.Handler) {
 	group.GET("/categories", h.ListKnowledgeCategories)
 	group.GET("/categories/tree", h.KnowledgeCategoryTree)
 	group.POST("/ask", h.Ask)
+	group.POST("/ask/stream", h.AskStream)
 	group.GET("/recommend", h.RecommendKnowledge)
 	group.POST("/:id/view", h.RecordKnowledgeView)
 	group.POST("/upload-doc", h.UploadDoc)
