@@ -9,9 +9,7 @@ import (
 )
 
 func (s *WorkflowService) completeStep(ctx context.Context, step *model.WorkflowStep, result string) {
-	if cancel, ok := s.humanStepCancels.LoadAndDelete(step.ID); ok {
-		cancel.(context.CancelFunc)()
-	}
+	s.humanStepCancels.cancel(step.ID)
 	now := time.Now()
 	step.Status = "completed"
 	step.Result = result
@@ -40,9 +38,7 @@ func (s *WorkflowService) completeStep(ctx context.Context, step *model.Workflow
 }
 
 func (s *WorkflowService) failStep(ctx context.Context, step *model.WorkflowStep, reason string) {
-	if cancel, ok := s.humanStepCancels.LoadAndDelete(step.ID); ok {
-		cancel.(context.CancelFunc)()
-	}
+	s.humanStepCancels.cancel(step.ID)
 	now := time.Now()
 	step.Status = "failed"
 	step.Result = reason

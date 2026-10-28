@@ -94,6 +94,10 @@ func (s *WorkflowService) ReviseStep(ctx context.Context, stepID, userID uint, f
 	step.StartedAt = nil
 	s.wfRepo.UpdateStep(ctx, step)
 
+	// 打回重跑会重新注册定时器，旧的必须先取消，
+	// 否则它到点后会把这一轮新的尝试判成超时。
+	s.humanStepCancels.cancel(step.ID)
+
 	if userID > 0 {
 		s.createNotification(ctx, userID, "workflow",
 			fmt.Sprintf("步骤需重新处理: %s", step.Name),

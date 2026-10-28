@@ -21,8 +21,8 @@ type WorkflowService struct {
 	chatSvc     *llm.ChatService
 	agentUserID uint
 
-	workflowMu          sync.Map
-	humanStepCancels    sync.Map
+	workflowMu       sync.Map
+	humanStepCancels humanStepTimers
 }
 
 func NewWorkflowService(

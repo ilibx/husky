@@ -45,20 +45,15 @@ func (s *WorkflowService) executeHumanStep(ctx context.Context, step *model.Work
 	}
 
 	// 4. 超时处理
-	var cfg struct {
-		TimeoutMinutes int `json:"timeout_minutes"`
-	}
+	var cfg humanStepConfig
 	if step.Config != "" {
 		if err := json.Unmarshal([]byte(step.Config), &cfg); err != nil {
 			log.Printf("executeHumanStep: failed to parse config: %v", err)
 		}
 	}
-	if cfg.TimeoutMinutes <= 0 {
-		cfg.TimeoutMinutes = 1440
-	}
 
-	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, time.Duration(cfg.TimeoutMinutes)*time.Minute)
-	s.humanStepCancels.Store(step.ID, timeoutCancel)
+	timeoutCtx, timeoutCancel := context.WithTimeout(ctx, time.Duration(humanStepTimeoutMinutes(cfg))*time.Minute)
+	s.humanStepCancels.register(step.ID, timeoutCancel)
 
 	go func(stepID uint, cancel context.CancelFunc) {
 		defer cancel()
@@ -67,7 +62,9 @@ func (s *WorkflowService) executeHumanStep(ctx context.Context, step *model.Work
 			return
 		}
 		saved, err := s.wfRepo.GetStepByID(context.WithoutCancel(ctx), stepID)
-		if err != nil || saved.Status != "pending" {
+		// 到点时步骤仍是 running/pending 才算「还在等人工处理」；其余状态说明
+		// 这一步已经被审批、驳回或跳过，不该再判超时。
+		if err != nil || !humanStepStillWaiting(saved.Status) {
 			return
 		}
 		s.failStep(context.WithoutCancel(ctx), saved, "human step timed out")
