@@ -106,11 +106,11 @@ Stay focused. When goal achieved, use "complete".`, step.Name, goal, ticket.Titl
 			return
 		}
 
-		var action ReActAction
-		if err := json.Unmarshal([]byte(resp.Content), &action); err != nil {
+		action, parseErr := parseReActAction(resp.Content)
+		if parseErr != nil {
 			history = append(history, roundHist{
-				action: ReActAction{Thought: "parse_error", Action: "invalid_json", ActionInput: resp.Content},
-				result: "Your response was not valid JSON. Respond only with the JSON format.",
+				action: ReActAction{Thought: "parse_error", Action: "invalid_json", ActionInput: truncateForEcho(resp.Content)},
+				result: fmt.Sprintf("Your response was not valid JSON (%v). Respond only with the JSON format.", parseErr),
 			})
 			continue
 		}
