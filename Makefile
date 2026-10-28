@@ -21,20 +21,7 @@ web-build:
 	@echo "Building Vue admin frontend..."
 	cd web && npm ci && npx vite build --mode embed
 	@echo "Copying to internal/admin/static..."
-	rm -rf internal/admin/static
-	cp -r web/dist internal/admin/static
-	@echo "Renaming _-prefixed files (Go embed excludes them)..."
-	cd internal/admin/static && find . -name '_*' -type f | while read f; do \
-		dir=$$(dirname "$$f"); \
-		base=$$(basename "$$f"); \
-		newbase="x$${base}"; \
-		mv "$$dir/$$base" "$$dir/$$newbase"; \
-	done
-	@echo "Updating references to renamed files..."
-	cd internal/admin/static && \
-		find assets -name '*.js' -exec sed -i 's|_plugin-vue_export-helper|x_plugin-vue_export-helper|g' {} + && \
-		find assets -name '*.css' -exec sed -i 's|_plugin-vue_export-helper|x_plugin-vue_export-helper|g' {} + && \
-		find . -name '*.html' -exec sed -i 's|_plugin-vue_export-helper|x_plugin-vue_export-helper|g' {} +
+	sh scripts/prepare-admin-embed.sh web/dist internal/admin/static
 	@echo "Web build completed!"
 
 ## build: Build both API and migrate binaries (runs web-build first)

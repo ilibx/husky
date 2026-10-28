@@ -1,0 +1,28 @@
+# 构建上下文排除项
+#
+# 不加这个文件时，COPY . . 会把本地 node_modules（几百 MB）、
+# 构建产物和 .git 一起塞进构建上下文。
+
+.git
+.github
+
+# 前端依赖与产物：由 Dockerfile 的 web 阶段在镜像内重新构建
+web/node_modules
+web/dist
+node_modules
+
+# 本地构建产物
+build/
+bin/
+*.exe
+*.test
+
+# embed 产物：镜像内由 prepare-admin-embed.sh 生成
+internal/admin/static
+
+# 本地配置与密钥
+config.yaml
+config.local.yaml
+.env
+.env.*
+*.local.yaml

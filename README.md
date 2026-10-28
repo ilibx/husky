@@ -1,6 +1,6 @@
 # Husky - 企业级智能工单系统
 
-[![Go Version](https://img.shields.io/badge/go-1.21+-blue.svg)](https://golang.org)
+[![Go Version](https://img.shields.io/badge/go-1.24+-blue.svg)](https://golang.org)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ## 项目概述
@@ -114,7 +114,7 @@ Husky 是一个基于 Go + GORM + Gin 实现的企业级智能工单处理系统
 
 ### 前置要求
 
-- Go 1.21+
+- Go 1.24+
 - Docker & Docker Compose
 - PostgreSQL 14+（推荐带 pgvector 扩展）
 - Redis 6+
